@@ -93,6 +93,8 @@ var OCR = (function () {
     var patrones = [
       /\bTOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
       /TOTAL\s+\$?\s*([\d.,]+)/i,
+      /\bIMPORTE\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+      /\bMONTO\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
       /\$?\s*([\d.,]+)\s*$/im
     ];
     for (var p = 0; p < patrones.length; p++) {
@@ -100,7 +102,7 @@ var OCR = (function () {
       if (match) return parsearMonto(match[1]);
     }
     var montos = [];
-    var regexMonto = /\$?\s*([\d]{1,3}(?:\.[\d]{3})+|[\d]{4,}(?:\.\d{3})*|\d{4,})(?:\s*$|\n)/g;
+    var regexMonto = /\$?\s*([\d]{1,3}(?:\.[\d]{3})+|[\d]{4,}(?:[.,]\d{3})*|\d{4,})(?:\s*(?:$|\n| ))/g;
     var m;
     while ((m = regexMonto.exec(texto)) !== null) {
       var valor = parsearMonto(m[1]);
@@ -110,7 +112,12 @@ var OCR = (function () {
   }
 
   function extraerMontoNeto(texto) {
-    var patrones = [/NETO\s*:?\s*\$?\s*([\d.,]+)/i, /SUBTOTAL\s*:?\s*\$?\s*([\d.,]+)/i, /SUB\s*TOTAL\s*:?\s*\$?\s*([\d.,]+)/i];
+    var patrones = [
+      /NETO\s*:?\s*\$?\s*([\d.,]+)/i,
+      /SUBTOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+      /SUB[.\s]*TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+      /BASE\s+IMPONIBLE\s*:?\s*\$?\s*([\d.,]+)/i
+    ];
     for (var p = 0; p < patrones.length; p++) {
       var match = texto.match(patrones[p]);
       if (match) return parsearMonto(match[1]);
@@ -141,7 +148,33 @@ var OCR = (function () {
 
   function parsearMonto(str) {
     if (!str) return 0;
-    var val = parseFloat(str.replace(/\./g, '').replace(/,/g, '.'));
+    var s = str.replace(/[$\s]/g, '');
+    var tieneComa = s.indexOf(',') !== -1;
+    var tienePunto = s.indexOf('.') !== -1;
+    if (tieneComa && tienePunto) {
+      var posComa = s.lastIndexOf(',');
+      var posPunto = s.lastIndexOf('.');
+      if (posComa > posPunto) {
+        s = s.replace(/\./g, '').replace(/,/g, '.');
+      } else {
+        s = s.replace(/,/g, '');
+      }
+    } else if (tieneComa) {
+      var partes = s.split(',');
+      if (partes.length === 2 && partes[1].length <= 2 && partes[0].length > 2) {
+        s = s.replace(/,/g, '.');
+      } else {
+        s = s.replace(/,/g, '');
+      }
+    } else if (tienePunto) {
+      var partesP = s.split('.');
+      if (partesP.length === 2 && partesP[1].length <= 2 && partesP[0].length > 2) {
+        // ya esta en formato decimal con punto, dejar como esta
+      } else {
+        s = s.replace(/\./g, '');
+      }
+    }
+    var val = parseFloat(s);
     return isNaN(val) ? 0 : val;
   }
 
@@ -155,3 +188,4 @@ var OCR = (function () {
 
   return { procesarImagen: procesarImagen };
 })();
+
