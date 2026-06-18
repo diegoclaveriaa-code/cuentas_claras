@@ -5,23 +5,26 @@ var OCR = (function () {
       reader.onload = function (e) {
         var imageData = e.target.result;
         if (typeof onProgress === 'function') {
-          onProgress('Iniciando motor OCR...');
+          onProgress('Pre-procesando imagen...');
         }
-        Tesseract.recognize(imageData, 'spa', {
-          logger: function (info) {
-            if (info.status === 'recognizing text' && typeof onProgress === 'function') {
-              var pct = Math.round((info.progress || 0) * 100);
-              onProgress('Leyendo texto... ' + pct + '%');
-            }
+        preprocesarImagen(imageData, 2.0).then(function (processed) {
+          if (typeof onProgress === 'function') {
+            onProgress('Iniciando motor OCR...');
           }
-        })
-        .then(function (result) {
+          return Tesseract.recognize(processed, 'spa', {
+            logger: function (info) {
+              if (info.status === 'recognizing text' && typeof onProgress === 'function') {
+                var pct = Math.round((info.progress || 0) * 100);
+                onProgress('Leyendo texto... ' + pct + '%');
+              }
+            }
+          });
+        }).then(function (result) {
           var texto = result.data.text;
           var datos = extraerCampos(texto);
           datos.textoCrudo = texto;
           resolve(datos);
-        })
-        .catch(function (err) {
+        }).catch(function (err) {
           reject(new Error('Error al procesar la imagen: ' + err.message));
         });
       };
@@ -30,6 +33,95 @@ var OCR = (function () {
       };
       reader.readAsDataURL(file);
     });
+  }
+
+  function preprocesarImagen(dataUrl, scale) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        var canvas = document.createElement('canvas');
+        var w = Math.round(img.width * (scale || 2));
+        var h = Math.round(img.height * (scale || 2));
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        var imageData = ctx.getImageData(0, 0, w, h);
+        var data = imageData.data;
+
+        // 1. Convertir a escala de grises y calcular histograma
+        var gray = new Uint8Array(w * h);
+        for (var i = 0; i < data.length; i += 4) {
+          var r = data[i];
+          var g = data[i + 1];
+          var b = data[i + 2];
+          var v = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+          gray[i / 4] = v;
+        }
+
+        // 2. Calcular umbral adaptativo (metodo Otsu simplificado)
+        var umbral = calcularUmbral(gray);
+
+        // 3. Aplicar binarizacion + aumento de contraste
+        for (var j = 0; j < gray.length; j++) {
+          var pix = j * 4;
+          var val = gray[j] > umbral ? 255 : 0;
+          // anti-alias leve en bordes
+          if (gray[j] > umbral - 15 && gray[j] < umbral + 15) {
+            val = gray[j] > umbral ? 255 : 0;
+          }
+          data[pix] = val;
+          data[pix + 1] = val;
+          data[pix + 2] = val;
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        // 4. Escalar 2x para mejorar lectura de texto pequeno
+        var canvas2 = document.createElement('canvas');
+        canvas2.width = 1280;
+        var ratio = 1280 / w;
+        canvas2.height = Math.round(h * ratio);
+        var ctx2 = canvas2.getContext('2d');
+        ctx2.imageSmoothingEnabled = true;
+        ctx2.imageSmoothingQuality = 'high';
+        ctx2.drawImage(canvas, 0, 0, canvas2.width, canvas2.height);
+
+        resolve(canvas2.toDataURL('image/png'));
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  function calcularUmbral(gray) {
+    var histograma = new Int32Array(256);
+    for (var i = 0; i < gray.length; i++) {
+      histograma[gray[i]]++;
+    }
+    var total = gray.length;
+    var sumaTotal = 0;
+    for (var t = 0; t < 256; t++) {
+      sumaTotal += t * histograma[t];
+    }
+    var pesoFondo = 0;
+    var sumaFondo = 0;
+    var maxVarianza = 0;
+    var umbral = 128;
+    for (var t = 0; t < 256; t++) {
+      pesoFondo += histograma[t];
+      if (pesoFondo === 0) continue;
+      var pesoFrente = total - pesoFondo;
+      if (pesoFrente === 0) break;
+      sumaFondo += t * histograma[t];
+      var mediaFondo = sumaFondo / pesoFondo;
+      var mediaFrente = (sumaTotal - sumaFondo) / pesoFrente;
+      var varianza = pesoFondo * pesoFrente * (mediaFondo - mediaFrente) * (mediaFondo - mediaFrente);
+      if (varianza > maxVarianza) {
+        maxVarianza = varianza;
+        umbral = t;
+      }
+    }
+    return Math.max(umbral, 110);
   }
 
   function extraerCampos(texto) {
@@ -188,4 +280,3 @@ var OCR = (function () {
 
   return { procesarImagen: procesarImagen };
 })();
-
