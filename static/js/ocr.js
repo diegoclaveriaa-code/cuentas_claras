@@ -280,3 +280,4 @@ var OCR = (function () {
 
   return { procesarImagen: procesarImagen };
 })();
+
