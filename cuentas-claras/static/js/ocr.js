@@ -163,32 +163,57 @@ var OCR = (function () {
   }
 
   function extraerNroDocumento(texto) {
+    // Patrones especificos para boletas/facturas chilenas
     var patrones = [
-      /\b(FACTURA|BOLETA|DOCUMENTO)\s*(?:ELECTRONICA|ELECTR\.?)?\s*(?:N[°º]|No\.?|NUMERO|#)?\s*:?\s*(\d{4,10})\b/i,
-      /\bN[°º]\s*(?:FACTURA|BOLETA|DOCUMENTO)?\s*:?\s*(\d{4,10})\b/i,
-      /\bFOLIO\s*:?\s*(\d{4,10})\b/i,
-      /\bNo\.?\s*:?\s*(\d{4,10})\s*(?:FACTURA|BOLETA)\b/i
+      // "FACTURA ELECTRONICA N° 12345678" o "BOLETA ELECTRONICA Nro 87654321"
+      /\b(FACTURA|BOLETA)\s*(?:ELECTRONICA|ELECTR(?:ONICA)?\.?|AFECTA|EXENTA)?\s*(?:N[°º]|Nro\.?|No\.?|Numero|NUMERO|FOLIO|#)\s*:?\s*(\d[\d.,]{3,15})\b/i,
+      // "N° FACTURA: 12345678"
+      /\bN[°º]\s*(?:FACTURA|BOLETA|DOC\.?)?\s*:?\s*(\d[\d.,]{3,15})\b/i,
+      // "FOLIO: 12345678"
+      /\bFOLIO\s*:?\s*(?:N[°º]\s*)?(\d[\d.,]{3,15})\b/i,
+      // "FACTURA 12345678"
+      /\bFACTURA\s+(\d{5,15})\b/i,
+      // "BOLETA 12345678"
+      /\bBOLETA\s+(\d{5,15})\b/i,
+      // SII reference: "S.I.I. - FACTURA ELECTRONICA N° 12345678"
+      /\bS\.?I\.?I\.?\b[\s\S]{0,60}?N[°º]\s*:?\s*(\d[\d.,]{3,15})/i
     ];
     for (var p = 0; p < patrones.length; p++) {
       var match = texto.match(patrones[p]);
       if (match) {
         var num = match[2] || match[1];
-        if (num && num.length >= 4) return num;
+        if (num) {
+          num = num.replace(/[.,\s]/g, '');
+          if (num.length >= 4 && num.length <= 15) return num;
+        }
       }
     }
-    var m = texto.match(/\bN[°º]?\s*:?\s*(\d{5,10})\b/i);
-    if (m && m[1].length >= 5) return m[1];
+
+    // Buscar en lineas: "N° : 12345678" o "Nro. 12345678"
+    var lineas = texto.split(/\r?\n/);
+    for (var i = 0; i < lineas.length; i++) {
+      var m = lineas[i].match(/\bN[°º]|Nro\.?|No\.?\s*:?\s*(\d[\d.,\s]{4,15})\b/i);
+      if (m && m[1]) {
+        var limpio = m[1].replace(/[.,\s]/g, '');
+        if (limpio.length >= 5 && limpio.length <= 15) return limpio;
+      }
+    }
+
     return '';
   }
 
   function extraerMontoTotal(texto) {
+    // Jerarquia: 1° "TOTAL" solo, 2° "TOTAL con variantes", 3° otros patrones
     var patrones = [
-      /\bTOTAL\s+(?:A\s+PAGAR|PAGADO|VENTA|CON\s+IVA|IVA\s+INCLUIDO)\s*:?\s*\$?\s*([\d.,]+)/i,
+      // === Prioridad 1: solo TOTAL (el mas confiable) ===
       /\bTOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
       /\bIMPORTE\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
       /\bMONTO\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
       /\bVALOR\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+      // === Prioridad 2: TOTAL con complementos ===
+      /\bTOTAL\s+(?:A\s+PAGAR|PAGADO|VENTA|CON\s+IVA|IVA\s+INCLUIDO)\s*:?\s*\$?\s*([\d.,]+)/i,
       /\bA\s+PAGAR\s*:?\s*\$?\s*([\d.,]+)/i,
+      // === Prioridad 3: patrones generales ===
       /\bTOTAL\b[\s\S]*?\$?\s*([\d.,]{4,})/i,
       /\$?\s*([\d.,]+)\s*$/im
     ];
@@ -200,10 +225,12 @@ var OCR = (function () {
       }
     }
 
-    // Buscar lineas que contengan "TOTAL" y extraer el numero
+    // Buscar lineas que contengan "TOTAL" (pero NO "SUBTOTAL") y extraer el numero
+    // Recorrer de abajo hacia arriba (el total suele estar al final)
     var lineas = texto.split(/\r?\n/);
-    for (var i = 0; i < lineas.length; i++) {
-      if (/TOTAL|IMPORTE|A PAGAR|MONTO|VALOR/i.test(lineas[i])) {
+    for (var i = lineas.length - 1; i >= 0; i--) {
+      if (/\bTOTAL\b|\bIMPORTE\b|\bA PAGAR\b|\bMONTO\b|\bVALOR\b/i.test(lineas[i]) &&
+          !/SUBTOTAL|SUB[.\s]*TOTAL/i.test(lineas[i])) {
         var nums = lineas[i].match(/[\d.,]+/g);
         if (nums) {
           for (var j = nums.length - 1; j >= 0; j--) {
@@ -235,17 +262,42 @@ var OCR = (function () {
   }
 
   function extraerMontoNeto(texto) {
+    // Patrones especificos para documentos chilenos
     var patrones = [
-      /NETO\s*:?\s*\$?\s*([\d.,]+)/i,
-      /IVA\s*:?\s*\$?\s*([\d.,]+)/i,
-      /SUBTOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
-      /SUB[.\s]*TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
-      /BASE\s+IMPONIBLE\s*:?\s*\$?\s*([\d.,]+)/i
+      /\bBASE\s+IMPONIBLE\s*:?\s*\$?\s*([\d.,]+)/i,
+      /\bBASE\s*:?\s*\$?\s*([\d.,]+)/i,
+      /\bTOTAL\s+SIN\s+IVA\s*:?\s*\$?\s*([\d.,]+)/i,
+      /\bNETO\s+(?:LEGAL\s+)?:?\s*\$?\s*([\d.,]+)/i,
+      /\bMONTO\s+NETO\s*:?\s*\$?\s*([\d.,]+)/i,
+      /\bVALOR\s+NETO\s*:?\s*\$?\s*([\d.,]+)/i,
+      /\bNETO\s*:?\s*\$?\s*([\d.,]+)/i,
+      /\bSUBTOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+      /\bSUB[.\s]*TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+      /\bIMPORTE\s+NETO\s*:?\s*\$?\s*([\d.,]+)/i
     ];
     for (var p = 0; p < patrones.length; p++) {
       var match = texto.match(patrones[p]);
-      if (match) return parsearMonto(match[1]);
+      if (match) {
+        var val = parsearMonto(match[1]);
+        if (val > 0) return val;
+      }
     }
+
+    // Si no encuentra patron explicito, buscar "NETO" en lineas evitando la misma linea que el TOTAL
+    var lineas = texto.split(/\r?\n/);
+    for (var i = 0; i < lineas.length; i++) {
+      if (/\bNETO\b|\bBASE\s+IMPONIBLE\b|\bSUBTOTAL\b/i.test(lineas[i]) &&
+          !/\bTOTAL\s+(?:A\s+PAGAR|PAGADO|VENTA|CON\s+IVA)\b/i.test(lineas[i])) {
+        var nums = lineas[i].match(/[\d.,]+/g);
+        if (nums) {
+          for (var j = nums.length - 1; j >= 0; j--) {
+            var v = parsearMonto(nums[j]);
+            if (v >= 100) return v;
+          }
+        }
+      }
+    }
+
     return 0;
   }
 
@@ -312,4 +364,5 @@ var OCR = (function () {
 
   return { procesarImagen: procesarImagen };
 })();
+
 
