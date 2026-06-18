@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cuentas Claras</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Vista 1: Registro / Acceso -->
+    <div id="view-registro" class="view">
+      <div class="container">
+        <div class="card">
+          <h1>Cuentas Claras</h1>
+          <p class="subtitle">Conservan la confianza y amistad</p>
+        </div>
+
+        <div class="card" id="card-nuevo-plan">
+          <h2>Crear nuevo plan</h2>
+          <p class="desc">Registra tu nombre y el proyecto a rendir.</p>
+          <form id="form-registro">
+            <label for="nombre">Tu nombre</label>
+            <input type="text" id="nombre" placeholder="Ej: Diego" required autocomplete="off">
+            <label for="proyecto">Nombre del proyecto</label>
+            <input type="text" id="proyecto" placeholder="Ej: Viaje playa 2025" required autocomplete="off">
+            <button type="submit" class="btn btn-primary btn-block">Crear plan</button>
+          </form>
+        </div>
+
+        <div class="card hidden" id="card-id-generado">
+          <h2>Plan creado</h2>
+          <p class="desc">Comparte este ID con quienes rendiran en este proyecto:</p>
+          <div class="id-box">
+            <span class="id-label">ID del proyecto:</span>
+            <code class="id-code" id="id-generado-text"></code>
+          </div>
+          <button id="btn-ir-dashboard-nuevo" class="btn btn-primary btn-block">Entrar al plan</button>
+        </div>
+
+        <div class="card">
+          <h2>Unirse a un plan existente</h2>
+          <p class="desc">Ingresa el ID y nombre del proyecto que te compartieron.</p>
+          <form id="form-unirse">
+            <label for="id-unirse">ID del proyecto</label>
+            <input type="text" id="id-unirse" placeholder="Ej: a1b2c3d4" required autocomplete="off">
+            <label for="proyecto-unirse">Nombre del proyecto</label>
+            <input type="text" id="proyecto-unirse" placeholder="Debe coincidir exactamente" required autocomplete="off">
+            <label for="nombre-unirse">Tu nombre</label>
+            <input type="text" id="nombre-unirse" placeholder="Ej: Diego" required autocomplete="off">
+            <button type="submit" class="btn btn-outline btn-block">Unirse al plan</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vista 2: Dashboard -->
+    <div id="view-dashboard" class="view hidden">
+      <div class="container">
+        <div class="card">
+          <div class="header-row">
+            <div>
+              <h1>Cuentas Claras</h1>
+              <p class="proyecto-activo" id="proyecto-activo"></p>
+            </div>
+            <button id="btn-cambiar-proyecto" class="btn btn-sm btn-outline">Cambiar</button>
+          </div>
+          <div class="id-box" id="id-box-dashboard">
+            <span class="id-label">ID del plan:</span>
+            <code class="id-code" id="id-proyecto-dashboard"></code>
+          </div>
+        </div>
+
+        <div class="card">
+          <button id="btn-nueva-boleta" class="btn btn-primary btn-lg btn-block">+ Nueva Boleta</button>
+          <p class="estado-excel" style="margin-top:12px">Los datos se guardan en el servidor. Todos los participantes del plan ven lo mismo.</p>
+        </div>
+
+        <div class="card" id="card-historial">
+          <h2>Historial de rendiciones</h2>
+          <div id="lista-rendiciones" class="lista-rendiciones">
+            <p class="vacio">Cargando...</p>
+          </div>
+          <button id="btn-exportar" class="btn btn-outline btn-block" style="display:none">Exportar Excel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vista 3: Subir Boleta -->
+    <div id="view-subir" class="view hidden">
+      <div class="container">
+        <div class="card">
+          <div class="header-row">
+            <h1>Nueva Boleta</h1>
+            <button id="btn-volver-subir" class="btn btn-sm btn-outline">Volver</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="upload-area" id="upload-area">
+            <input type="file" id="file-input" accept="image/*" capture="environment" hidden>
+            <div class="upload-placeholder" id="upload-placeholder">
+              <span class="upload-icon">&#x1F4F7;</span>
+              <p>Toca para tomar una foto o seleccionar una imagen</p>
+              <p class="upload-hint">Apunta bien a la boleta para mejor lectura</p>
+            </div>
+            <img id="preview-img" class="preview-img hidden" alt="Vista previa">
+          </div>
+          <div class="upload-actions">
+            <button id="btn-capturar" class="btn btn-primary">Tomar / Elegir foto</button>
+            <button id="btn-procesar" class="btn btn-success hidden">Leer boleta</button>
+            <button id="btn-otra-foto" class="btn btn-outline hidden">Otra foto</button>
+          </div>
+          <div id="ocr-progress" class="ocr-progress hidden">
+            <div class="spinner"></div>
+            <p id="ocr-status">Procesando imagen...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vista 4: Resultado OCR -->
+    <div id="view-resultado" class="view hidden">
+      <div class="container">
+        <div class="card">
+          <div class="header-row">
+            <h1>Resultado</h1>
+            <button id="btn-volver-resultado" class="btn btn-sm btn-outline">Volver</button>
+          </div>
+          <p class="desc">Verifica y corrige los datos leidos de la boleta.</p>
+        </div>
+
+        <div class="card">
+          <form id="form-resultado">
+            <label for="campo-emisor">Empresa que emite</label>
+            <input type="text" id="campo-emisor" placeholder="Nombre del comercio" required>
+
+            <div class="row-2">
+              <div>
+                <label for="campo-tipo">Tipo de documento</label>
+                <select id="campo-tipo" required>
+                  <option value="">Seleccionar...</option>
+                  <option value="Boleta">Boleta</option>
+                  <option value="Factura">Factura</option>
+                </select>
+              </div>
+              <div>
+                <label for="campo-nro">Nro Boleta / Factura</label>
+                <input type="text" id="campo-nro" placeholder="Ej: 12345678">
+              </div>
+            </div>
+
+            <div class="row-2">
+              <div>
+                <label for="campo-total">Monto Total (con IVA)</label>
+                <input type="number" id="campo-total" placeholder="0" step="1" required>
+              </div>
+              <div>
+                <label for="campo-neto">Monto Neto</label>
+                <input type="number" id="campo-neto" placeholder="0" step="1" required>
+              </div>
+            </div>
+
+            <div class="row-2">
+              <div>
+                <label for="campo-fecha">Fecha</label>
+                <input type="date" id="campo-fecha" required>
+              </div>
+              <div>
+                <label for="campo-hora">Hora</label>
+                <input type="time" id="campo-hora" required>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-success btn-lg btn-block">Confirmar y guardar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ocr.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
