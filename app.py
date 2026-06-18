@@ -71,7 +71,7 @@ def crear_proyecto():
 def unirse_proyecto():
     data = request.get_json(silent=True) or {}
     proj_id = data.get('id', '').strip()
-    usuario = data.get('usuario', '').strip()
+    usuario = data.get('usuario', '').strip() 
     nombre = data.get('nombre', '').strip()
 
     if not proj_id or not usuario or not nombre:
