@@ -30,7 +30,11 @@
     document.getElementById('btn-capturar').addEventListener('click', function () {
       document.getElementById('file-input').click();
     });
+    document.getElementById('btn-adjuntar').addEventListener('click', function () {
+      document.getElementById('doc-input').click();
+    });
     document.getElementById('file-input').addEventListener('change', onFileSelected);
+    document.getElementById('doc-input').addEventListener('change', onFileSelected);
     document.getElementById('upload-area').addEventListener('click', function () {
       document.getElementById('file-input').click();
     });
@@ -163,11 +167,15 @@
 
   function resetSubir() {
     document.getElementById('file-input').value = '';
+    document.getElementById('doc-input').value = '';
     document.getElementById('preview-img').classList.add('hidden');
-    document.getElementById('upload-placeholder').classList.remove('hidden');
+    var placeholder = document.getElementById('upload-placeholder');
+    placeholder.classList.remove('hidden');
+    placeholder.innerHTML = '<span class="upload-icon">&#x1F4F7;</span><p>Toca para tomar una foto o seleccionar una imagen</p><p class="upload-hint">Apunta bien a la boleta para mejor lectura</p>';
     document.getElementById('btn-procesar').classList.add('hidden');
     document.getElementById('btn-otra-foto').classList.add('hidden');
     document.getElementById('btn-capturar').classList.remove('hidden');
+    document.getElementById('btn-adjuntar').classList.remove('hidden');
     document.getElementById('ocr-progress').classList.add('hidden');
   }
 
@@ -175,6 +183,19 @@
     var file = e.target.files[0];
     if (!file) return;
     imagenSeleccionada = file;
+    if (file.type === 'application/pdf') {
+      // PDF: mostrar nombre y permitir procesar
+      document.getElementById('preview-img').classList.add('hidden');
+      var placeholder = document.getElementById('upload-placeholder');
+      placeholder.classList.remove('hidden');
+      placeholder.innerHTML = '<span class="upload-icon">&#128196;</span><p>PDF: ' + file.name + '</p><p class="upload-hint">' + Math.round(file.size / 1024) + ' KB</p>';
+      document.getElementById('btn-procesar').classList.remove('hidden');
+      document.getElementById('btn-otra-foto').classList.remove('hidden');
+      document.getElementById('btn-capturar').classList.add('hidden');
+      document.getElementById('btn-adjuntar').classList.add('hidden');
+      return;
+    }
+    // Imagen normal
     var reader = new FileReader();
     reader.onload = function (ev) {
       var img = document.getElementById('preview-img');
@@ -184,6 +205,7 @@
       document.getElementById('btn-procesar').classList.remove('hidden');
       document.getElementById('btn-otra-foto').classList.remove('hidden');
       document.getElementById('btn-capturar').classList.add('hidden');
+      document.getElementById('btn-adjuntar').classList.add('hidden');
     };
     reader.readAsDataURL(file);
   }
@@ -313,4 +335,3 @@
 
   init();
 })();
-
