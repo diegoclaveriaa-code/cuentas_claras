@@ -14,7 +14,8 @@
     <!-- Vista 1: Registro / Acceso -->
     <div id="view-registro" class="view">
       <div class="container">
-        <div class="card">
+        <div class="card card-hero">
+          <div class="logo"><img src="https://ikxkgiiwcjsfxiqnwojk.supabase.co/storage/v1/object/public/boletas/Designer%20(3).png" alt="Logo"></div>
           <h1>Cuentas Claras</h1>
           <p class="subtitle">Conservan la confianza y amistad</p>
         </div>
@@ -63,7 +64,8 @@
         <div class="card">
           <div class="header-row">
             <div>
-              <h1>Cuentas Claras</h1>
+              <div class="logo"><img src="https://ikxkgiiwcjsfxiqnwojk.supabase.co/storage/v1/object/public/boletas/Designer%20(3).png" alt="Logo"></div>
+              <h1 style="margin-top:4px">Cuentas Claras</h1>
               <p class="proyecto-activo" id="proyecto-activo"></p>
             </div>
             <button id="btn-cambiar-proyecto" class="btn btn-sm btn-outline">Cambiar</button>
@@ -78,6 +80,23 @@
           <button id="btn-nueva-boleta" class="btn btn-primary btn-lg btn-block">+ Nueva Boleta (con foto)</button>
           <button id="btn-manual" class="btn btn-outline btn-block" style="margin-top:8px">+ Ingresar manualmente</button>
           <p class="estado-excel" style="margin-top:12px">Los datos se guardan en el servidor. Todos los participantes del plan ven lo mismo.</p>
+        </div>
+
+        <div class="card" id="card-split" style="display:none">
+          <h2>Dividir cuenta</h2>
+          <p class="desc">Calcula cuánto debe pagar cada participante.</p>
+          <div class="split-total" id="split-total-label"></div>
+          <div class="row-2">
+            <div>
+              <label for="split-personas">N° de personas</label>
+              <input type="number" id="split-personas" placeholder="Ej: 4" min="1" step="1">
+            </div>
+            <div>
+              <label for="split-resultado">Cuota por persona</label>
+              <input type="text" id="split-resultado" readonly placeholder="$ 0">
+            </div>
+          </div>
+          <button id="btn-calcular-split" class="btn btn-primary btn-block" style="margin-top:12px">Calcular división</button>
         </div>
 
         <div class="card" id="card-historial">
