@@ -39,6 +39,8 @@ def init_db():
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (proyecto_id) REFERENCES proyectos(id)
             )''')
+            # Agregar columna imagen_url si la tabla ya existia sin ella
+            cur.execute('''ALTER TABLE rendiciones ADD COLUMN IF NOT EXISTS imagen_url TEXT''')
     except Exception as e:
         print("Error inicializando DB:", e)
 
@@ -222,4 +224,5 @@ init_db()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
