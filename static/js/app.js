@@ -146,7 +146,8 @@
         '<div class="r-montos">' +
           '<span class="total">Total: $' + formatearNumero(r.monto_total) + '</span>' +
           '<span class="neto">Neto: $' + formatearNumero(r.monto_neto) + '</span>' +
-        '</div>';
+        '</div>' +
+        (r.imagen_url ? '<a href="' + r.imagen_url + '" target="_blank" class="link-foto">📷 Ver foto</a>' : '');
       container.appendChild(div);
     });
   }
@@ -266,14 +267,37 @@
       hora: hora
     };
 
-    API.agregarRendicion(Storage.obtenerIdProyecto(), payload).then(function (data) {
-      if (data.error) { toast(data.error, 'error'); return; }
-      toast('Boleta guardada en el servidor', 'success');
-      imagenSeleccionada = null; resultadoOCR = null;
-      resetSubir();
-      mostrarVista('dashboard');
-      cargarDashboard();
-    }).catch(function () { toast('Error al guardar en el servidor', 'error'); });
+    function guardar() {
+      API.agregarRendicion(Storage.obtenerIdProyecto(), payload).then(function (data) {
+        if (data.error) { toast(data.error, 'error'); return; }
+        toast('Boleta guardada en el servidor', 'success');
+        imagenSeleccionada = null; resultadoOCR = null;
+        resetSubir();
+        mostrarVista('dashboard');
+        cargarDashboard();
+      }).catch(function () { toast('Error al guardar en el servidor', 'error'); });
+    }
+
+    // Si hay imagen seleccionada, subirla a Supabase Storage como respaldo
+    if (imagenSeleccionada && typeof supabaseClient !== 'undefined') {
+      var fileName = Storage.obtenerIdProyecto() + '_' + Date.now() + '.jpg';
+      supabaseClient.storage.from('boletas').upload(fileName, imagenSeleccionada, {
+        cacheControl: '3600',
+        upsert: false
+      }).then(function (result) {
+        if (result.error) {
+          console.warn('No se pudo subir la imagen:', result.error.message);
+        } else {
+          var urlData = supabaseClient.storage.from('boletas').getPublicUrl(fileName);
+          payload.imagenUrl = urlData.data.publicUrl;
+        }
+        guardar();
+      }).catch(function () {
+        guardar();
+      });
+    } else {
+      guardar();
+    }
   }
 
   // ---- Utilidades ----
