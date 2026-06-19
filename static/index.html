@@ -6,6 +6,7 @@
   <title>Cuentas Claras</title>
   <link rel="stylesheet" href="css/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -190,5 +191,12 @@
   <script src="js/api.js"></script>
   <script src="js/ocr.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    // Configuracion Supabase — reemplaza con tus datos reales
+    var SUPABASE_URL = 'https://ikxkgiiwcjsfxiqnwojk.supabase.co';
+    var SUPABASE_ANON_KEY = 'sb_publishable_oaHcSryjKIhop4RLiRR-ug_nn0CbF8q';
+    var supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  </script>
 </body>
 </html>
+
