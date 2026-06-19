@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -102,6 +103,7 @@
         <div class="card">
           <div class="upload-area" id="upload-area">
             <input type="file" id="file-input" accept="image/*" capture="environment" hidden>
+            <input type="file" id="doc-input" accept="image/*,application/pdf" hidden>
             <div class="upload-placeholder" id="upload-placeholder">
               <span class="upload-icon">&#x1F4F7;</span>
               <p>Toca para tomar una foto o seleccionar una imagen</p>
@@ -111,6 +113,7 @@
           </div>
           <div class="upload-actions">
             <button id="btn-capturar" class="btn btn-primary">Tomar / Elegir foto</button>
+            <button id="btn-adjuntar" class="btn btn-outline">Adjuntar archivo</button>
             <button id="btn-procesar" class="btn btn-success hidden">Leer boleta</button>
             <button id="btn-otra-foto" class="btn btn-outline hidden">Otra foto</button>
           </div>
@@ -199,4 +202,3 @@
   </script>
 </body>
 </html>
-
