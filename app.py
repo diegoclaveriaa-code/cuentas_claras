@@ -1,44 +1,45 @@
 import os
-import sqlite3
 import string
 import random
 import tempfile
-from datetime import datetime
+import psycopg2
+import psycopg2.extras
 from flask import Flask, request, jsonify, send_file
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
-DATABASE = '/opt/render/project/data/cuentas.db'
+DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite://:memory:')
 
 def get_db():
-    db = sqlite3.connect(DATABASE)
-    db.row_factory = sqlite3.Row
-    db.execute("PRAGMA journal_mode=WAL")
-    db.execute("PRAGMA foreign_keys=ON")
-    return db
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = True
+    return conn
 
 def init_db():
-    os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
-    with get_db() as db:
-        db.execute('''CREATE TABLE IF NOT EXISTS proyectos (
-            id TEXT PRIMARY KEY,
-            nombre TEXT NOT NULL,
-            creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        db.execute('''CREATE TABLE IF NOT EXISTS rendiciones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            proyecto_id TEXT NOT NULL,
-            nombre_persona_gasto TEXT NOT NULL,
-            boleta_o_factura TEXT NOT NULL,
-            empresa_emite TEXT NOT NULL,
-            nro_boleta_factura TEXT,
-            monto_neto REAL DEFAULT 0,
-            monto_total REAL DEFAULT 0,
-            fecha TEXT,
-            hora TEXT,
-            creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (proyecto_id) REFERENCES proyectos(id)
-        )''')
+    try:
+        with get_db() as db:
+            cur = db.cursor()
+            cur.execute('''CREATE TABLE IF NOT EXISTS proyectos (
+                id TEXT PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+            cur.execute('''CREATE TABLE IF NOT EXISTS rendiciones (
+                id SERIAL PRIMARY KEY,
+                proyecto_id TEXT NOT NULL,
+                nombre_persona_gasto TEXT NOT NULL,
+                boleta_o_factura TEXT NOT NULL,
+                empresa_emite TEXT NOT NULL,
+                nro_boleta_factura TEXT,
+                monto_neto REAL DEFAULT 0,
+                monto_total REAL DEFAULT 0,
+                fecha TEXT,
+                hora TEXT,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (proyecto_id) REFERENCES proyectos(id)
+            )''')
+    except Exception as e:
+        print("Error inicializando DB:", e)
 
 def generar_id(length=8):
     chars = string.ascii_lowercase + string.digits
@@ -62,8 +63,12 @@ def crear_proyecto():
         return jsonify({'error': 'Nombre de proyecto y usuario son obligatorios'}), 400
 
     proj_id = generar_id()
-    with get_db() as db:
-        db.execute('INSERT INTO proyectos (id, nombre) VALUES (?, ?)', (proj_id, nombre))
+    try:
+        with get_db() as db:
+            cur = db.cursor()
+            cur.execute('INSERT INTO proyectos (id, nombre) VALUES (%s, %s)', (proj_id, nombre))
+    except Exception as e:
+        return jsonify({'error': 'Error al crear proyecto: ' + str(e)}), 500
 
     return jsonify({'id': proj_id, 'nombre': nombre, 'usuario': usuario}), 201
 
@@ -71,14 +76,16 @@ def crear_proyecto():
 def unirse_proyecto():
     data = request.get_json(silent=True) or {}
     proj_id = data.get('id', '').strip()
-    usuario = data.get('usuario', '').strip() 
+    usuario = data.get('usuario', '').strip()
     nombre = data.get('nombre', '').strip()
 
     if not proj_id or not usuario or not nombre:
         return jsonify({'error': 'ID, nombre de proyecto y usuario son obligatorios'}), 400
 
     with get_db() as db:
-        proyecto = db.execute('SELECT * FROM proyectos WHERE id = ?', (proj_id,)).fetchone()
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT * FROM proyectos WHERE id = %s', (proj_id,))
+        proyecto = cur.fetchone()
         if not proyecto:
             return jsonify({'error': 'Proyecto no encontrado. Verifica el ID.'}), 404
         if proyecto['nombre'].strip().lower() != nombre.lower():
@@ -89,19 +96,22 @@ def unirse_proyecto():
 @app.route('/api/proyectos/<proj_id>', methods=['GET'])
 def obtener_proyecto(proj_id):
     with get_db() as db:
-        proyecto = db.execute('SELECT * FROM proyectos WHERE id = ?', (proj_id,)).fetchone()
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT * FROM proyectos WHERE id = %s', (proj_id,))
+        proyecto = cur.fetchone()
         if not proyecto:
             return jsonify({'error': 'Proyecto no encontrado'}), 404
 
-        rendiciones = db.execute(
-            'SELECT * FROM rendiciones WHERE proyecto_id = ? ORDER BY creado_en DESC',
+        cur.execute(
+            'SELECT * FROM rendiciones WHERE proyecto_id = %s ORDER BY creado_en DESC',
             (proj_id,)
-        ).fetchall()
+        )
+        rendiciones = cur.fetchall()
 
         return jsonify({
             'id': proyecto['id'],
             'nombre': proyecto['nombre'],
-            'creado_en': proyecto['creado_en'],
+            'creado_en': proyecto['creado_en'].isoformat() if proyecto.get('creado_en') else None,
             'rendiciones': [dict(r) for r in rendiciones]
         })
 
@@ -112,14 +122,15 @@ def agregar_rendicion(proj_id):
     data = request.get_json(silent=True) or {}
 
     with get_db() as db:
-        proyecto = db.execute('SELECT id FROM proyectos WHERE id = ?', (proj_id,)).fetchone()
-        if not proyecto:
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT id FROM proyectos WHERE id = %s', (proj_id,))
+        if not cur.fetchone():
             return jsonify({'error': 'Proyecto no encontrado'}), 404
 
-        db.execute('''INSERT INTO rendiciones (
+        cur.execute('''INSERT INTO rendiciones (
             proyecto_id, nombre_persona_gasto, boleta_o_factura,
             empresa_emite, nro_boleta_factura, monto_neto, monto_total, fecha, hora
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', (
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)''', (
             proj_id,
             data.get('nombrePersonaGasto', ''),
             data.get('tipoDocumento', ''),
@@ -144,14 +155,17 @@ def descargar_excel(proj_id):
         return jsonify({'error': 'openpyxl no esta instalado en el servidor'}), 500
 
     with get_db() as db:
-        proyecto = db.execute('SELECT * FROM proyectos WHERE id = ?', (proj_id,)).fetchone()
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT * FROM proyectos WHERE id = %s', (proj_id,))
+        proyecto = cur.fetchone()
         if not proyecto:
             return jsonify({'error': 'Proyecto no encontrado'}), 404
 
-        rendiciones = db.execute(
-            'SELECT * FROM rendiciones WHERE proyecto_id = ? ORDER BY creado_en ASC',
+        cur.execute(
+            'SELECT * FROM rendiciones WHERE proyecto_id = %s ORDER BY creado_en ASC',
             (proj_id,)
-        ).fetchall()
+        )
+        rendiciones = cur.fetchall()
 
     wb = Workbook()
     ws = wb.active
@@ -204,6 +218,6 @@ def health():
 init_db()
 
 if __name__ == '__main__':
-    init_db()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
