@@ -35,6 +35,7 @@ def init_db():
                 monto_total REAL DEFAULT 0,
                 fecha TEXT,
                 hora TEXT,
+                imagen_url TEXT,
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (proyecto_id) REFERENCES proyectos(id)
             )''')
@@ -129,8 +130,8 @@ def agregar_rendicion(proj_id):
 
         cur.execute('''INSERT INTO rendiciones (
             proyecto_id, nombre_persona_gasto, boleta_o_factura,
-            empresa_emite, nro_boleta_factura, monto_neto, monto_total, fecha, hora
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)''', (
+            empresa_emite, nro_boleta_factura, monto_neto, monto_total, fecha, hora, imagen_url
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''', (
             proj_id,
             data.get('nombrePersonaGasto', ''),
             data.get('tipoDocumento', ''),
@@ -139,7 +140,8 @@ def agregar_rendicion(proj_id):
             data.get('montoNeto', 0) or 0,
             data.get('montoTotal', 0) or 0,
             data.get('fecha', ''),
-            data.get('hora', '')
+            data.get('hora', ''),
+            data.get('imagenUrl', '') or ''
         ))
 
     return jsonify({'ok': True}), 201
