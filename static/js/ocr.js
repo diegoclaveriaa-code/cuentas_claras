@@ -269,19 +269,18 @@ var OCR = (function () {
   }
 
   function extraerMontoTotal(texto) {
-    // Jerarquia: 1° "TOTAL" solo, 2° "TOTAL con variantes", 3° otros patrones
+    // ── Fase 1: Patrones explicitos de TOTAL (jerarquia) ──
     var patrones = [
-      // === Prioridad 1: solo TOTAL (el mas confiable) ===
+      // Prioridad 1: "TOTAL" solo
       /\bTOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
       /\bIMPORTE\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
       /\bMONTO\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
       /\bVALOR\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
-      // === Prioridad 2: TOTAL con complementos ===
-      /\bTOTAL\s+(?:A\s+PAGAR|PAGADO|VENTA|CON\s+IVA|IVA\s+INCLUIDO)\s*:?\s*\$?\s*([\d.,]+)/i,
+      // Prioridad 2: TOTAL con complementos
+      /\bTOTAL\s+(?:A\s+PAGAR|PAGADO|VENTA|CON\s+IVA|IVA\s+INCLUIDO|FINAL)\s*:?\s*\$?\s*([\d.,]+)/i,
       /\bA\s+PAGAR\s*:?\s*\$?\s*([\d.,]+)/i,
-      // === Prioridad 3: patrones generales ===
-      /\bTOTAL\b[\s\S]*?\$?\s*([\d.,]{4,})/i,
-      /\$?\s*([\d.,]+)\s*$/im
+      // Prioridad 3: patrones generales
+      /\bTOTAL\b[\s\S]{0,60}?\$?\s*([\d.,]{4,})/i
     ];
     for (var p = 0; p < patrones.length; p++) {
       var match = texto.match(patrones[p]);
@@ -291,13 +290,14 @@ var OCR = (function () {
       }
     }
 
-    // Buscar lineas que contengan "TOTAL" (pero NO "SUBTOTAL") y extraer el numero
-    // Recorrer de abajo hacia arriba (el total suele estar al final)
     var lineas = texto.split(/\r?\n/);
+
+    // ── Fase 2: Buscar TOTAL de abajo hacia arriba (NO SUBTOTAL) ──
     for (var i = lineas.length - 1; i >= 0; i--) {
-      if (/\bTOTAL\b|\bIMPORTE\b|\bA PAGAR\b|\bMONTO\b|\bVALOR\b/i.test(lineas[i]) &&
-          !/SUBTOTAL|SUB[.\s]*TOTAL/i.test(lineas[i])) {
-        var nums = lineas[i].match(/[\d.,]+/g);
+      var ln = lineas[i];
+      if (/\bTOTAL\b|\bIMPORTE\b|\bA\s*PAGAR\b|\bMONTO\b|\bVALOR\b/i.test(ln) &&
+          !/SUBTOTAL|SUB[.\s]*TOTAL|NETO/i.test(ln)) {
+        var nums = ln.match(/[\d.,]+/g);
         if (nums) {
           for (var j = nums.length - 1; j >= 0; j--) {
             var v = parsearMonto(nums[j]);
@@ -307,28 +307,68 @@ var OCR = (function () {
       }
     }
 
-    // Ultimo recurso: buscar el numero mas grande en el ultimo tercio del texto
+    // ── Fase 3: Buscar numero grande DESPUES de "IVA" (formato SII chileno) ──
+    // En boletas electronicas chilenas el orden es: NETO → IVA → TOTAL
+    var posIVA = -1;
+    for (var k = lineas.length - 1; k >= 0; k--) {
+      if (/\bIVA\b/i.test(lineas[k])) { posIVA = k; break; }
+    }
+    if (posIVA >= 0) {
+      // Buscar en las lineas DESPUES de IVA
+      for (var l = posIVA + 1; l < lineas.length; l++) {
+        var numsPostIVA = lineas[l].match(/[\d.,]+/g);
+        if (numsPostIVA) {
+          for (var m = numsPostIVA.length - 1; m >= 0; m--) {
+            var v2 = parsearMonto(numsPostIVA[m]);
+            if (v2 >= 100) return v2;
+          }
+        }
+      }
+      // Si no hay lineas despues de IVA, buscar en la misma linea de IVA (formato: "IVA 1900 TOTAL 11900")
+      var numsMisma = lineas[posIVA].match(/[\d.,]+/g);
+      if (numsMisma && numsMisma.length >= 4) {
+        return parsearMonto(numsMisma[numsMisma.length - 1]);
+      }
+    }
+
+    // ── Fase 4: "SON:" o palabras en texto seguidas del total (comun en facturas SII) ──
+    var matchSon = texto.match(/\bSON\s*:?\s*[\s\S]{10,80}?\$?\s*([\d.,]{4,})/i);
+    if (matchSon) {
+      var vSon = parsearMonto(matchSon[1]);
+      if (vSon >= 100) return vSon;
+    }
+
+    // ── Fase 5: Ultima linea con numero grande (formato: "---" seguido de total) ──
+    for (var n = lineas.length - 1; n >= 0; n--) {
+      var ln2 = lineas[n];
+      if (/^[\s-—=_]+$/.test(ln2)) continue; // saltar lineas separadoras
+      var numsFin = ln2.match(/[\d.,]+/g);
+      if (numsFin && numsFin.length >= 1) {
+        return parsearMonto(numsFin[numsFin.length - 1]);
+      }
+    }
+
+    // ── Fase 6: Numero mas grande en el ultimo 40% ──
     var tercio = Math.floor(texto.length * 0.6);
     var parteFinal = texto.substring(tercio);
     var todos = parteFinal.match(/\$?\s*[\d.,]{4,}/g) || [];
     var maximo = 0;
-    for (var k = 0; k < todos.length; k++) {
-      var posible = parsearMonto(todos[k]);
+    for (var q = 0; q < todos.length; q++) {
+      var posible = parsearMonto(todos[q]);
       if (posible > maximo && posible < 100000000) maximo = posible;
     }
     if (maximo > 0) return maximo;
 
-    // Buscar en todo el texto
+    // ── Fase 7: Numero mas grande en todo el texto ──
     var todosFull = texto.match(/\$?\s*[\d.,]{4,}/g) || [];
-    for (var l = 0; l < todosFull.length; l++) {
-      var p2 = parsearMonto(todosFull[l]);
+    for (var r = 0; r < todosFull.length; r++) {
+      var p2 = parsearMonto(todosFull[r]);
       if (p2 > maximo && p2 < 100000000) maximo = p2;
     }
     return maximo;
   }
 
   function extraerMontoNeto(texto) {
-    // Patrones especificos para documentos chilenos
     var patrones = [
       /\bBASE\s+IMPONIBLE\s*:?\s*\$?\s*([\d.,]+)/i,
       /\bBASE\s*:?\s*\$?\s*([\d.,]+)/i,
@@ -349,11 +389,12 @@ var OCR = (function () {
       }
     }
 
-    // Si no encuentra patron explicito, buscar "NETO" en lineas evitando la misma linea que el TOTAL
+    // Si no encuentra patron explicito, buscar en lineas con NETO/BASE/SUBTOTAL
     var lineas = texto.split(/\r?\n/);
     for (var i = 0; i < lineas.length; i++) {
       if (/\bNETO\b|\bBASE\s+IMPONIBLE\b|\bSUBTOTAL\b/i.test(lineas[i]) &&
-          !/\bTOTAL\s+(?:A\s+PAGAR|PAGADO|VENTA|CON\s+IVA)\b/i.test(lineas[i])) {
+          !/\bTOTAL\s+(?:A\s+PAGAR|PAGADO|VENTA|CON\s+IVA)\b/i.test(lineas[i]) &&
+          !/\bIVA\b/i.test(lineas[i])) {
         var nums = lineas[i].match(/[\d.,]+/g);
         if (nums) {
           for (var j = nums.length - 1; j >= 0; j--) {
