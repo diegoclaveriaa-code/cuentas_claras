@@ -26,6 +26,7 @@
     document.getElementById('btn-nueva-boleta').addEventListener('click', onNuevaBoleta);
     document.getElementById('btn-manual').addEventListener('click', abrirFormularioManual);
     document.getElementById('btn-exportar').addEventListener('click', onExportar);
+    document.getElementById('btn-calcular-split').addEventListener('click', onCalcularSplit);
 
     document.getElementById('btn-capturar').addEventListener('click', function () {
       document.getElementById('file-input').click();
@@ -129,6 +130,18 @@
       renderHistorial(data.rendiciones || []);
       var rendiciones = data.rendiciones || [];
       document.getElementById('btn-exportar').style.display = rendiciones.length > 0 ? '' : 'none';
+
+      // Calculadora de division
+      var total = 0;
+      rendiciones.forEach(function (r) { total += (r.monto_total || 0); });
+      var cardSplit = document.getElementById('card-split');
+      if (total > 0) {
+        cardSplit.style.display = '';
+        document.getElementById('split-total-label').textContent = 'Total acumulado: $' + total.toLocaleString('es-CL');
+        document.getElementById('split-total-label').dataset.total = total;
+      } else {
+        cardSplit.style.display = 'none';
+      }
     }).catch(function () { toast('Error al cargar datos del servidor', 'error'); });
   }
 
@@ -160,6 +173,16 @@
     var idPlan = Storage.obtenerIdProyecto();
     window.open(API.urlExcel(idPlan), '_blank');
     toast('Descargando Excel...', 'success');
+  }
+
+  function onCalcularSplit() {
+    var personas = parseInt(document.getElementById('split-personas').value) || 0;
+    if (personas <= 0) { toast('Ingresa un numero valido de personas', 'error'); return; }
+    var total = parseFloat(document.getElementById('split-total-label').dataset.total) || 0;
+    if (total <= 0) { toast('No hay rendiciones que dividir', 'error'); return; }
+    var cuota = Math.ceil(total / personas);
+    document.getElementById('split-resultado').value = '$' + cuota.toLocaleString('es-CL');
+    toast('Cuota: $' + cuota.toLocaleString('es-CL') + ' por persona', 'success');
   }
 
   // ---- Subir Boleta ----
@@ -335,3 +358,4 @@
 
   init();
 })();
+
