@@ -1,6 +1,14 @@
 var API = (function () {
   var BASE = '/api';
 
+  function authHeader() {
+    var token = Storage.obtenerToken();
+    return token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+                 : { 'Content-Type': 'application/json' };
+  }
+
+  // ── Modo Libre ──
+
   function crearProyecto(usuario, nombre) {
     return fetch(BASE + '/proyectos', {
       method: 'POST',
@@ -33,11 +41,125 @@ var API = (function () {
     return BASE + '/proyectos/' + idProyecto + '/excel';
   }
 
+  // ── Modo Ejecutivo: Auth ──
+
+  function register(email, password, rol) {
+    return fetch(BASE + '/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password, rol: rol })
+    }).then(function (r) { return r.json(); });
+  }
+
+  function login(email, password) {
+    return fetch(BASE + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password })
+    }).then(function (r) { return r.json(); });
+  }
+
+  function logout() {
+    return fetch(BASE + '/auth/logout', {
+      method: 'POST',
+      headers: authHeader()
+    }).then(function (r) { return r.json(); });
+  }
+
+  function me() {
+    return fetch(BASE + '/auth/me', {
+      headers: authHeader()
+    }).then(function (r) { return r.json(); });
+  }
+
+  // ── Modo Ejecutivo: Rendiciones ──
+
+  function crearRendicionEjecutiva(tipo, nombre, fecha, monto_total) {
+    return fetch(BASE + '/rendiciones', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ tipo: tipo, nombre: nombre, fecha: fecha, monto_total: monto_total })
+    }).then(function (r) { return r.json(); });
+  }
+
+  function listarRendiciones(estado) {
+    var url = BASE + '/rendiciones';
+    if (estado) url += '?estado=' + encodeURIComponent(estado);
+    return fetch(url, { headers: authHeader() }).then(function (r) { return r.json(); });
+  }
+
+  function obtenerRendicion(id) {
+    return fetch(BASE + '/rendiciones/' + id, { headers: authHeader() }).then(function (r) { return r.json(); });
+  }
+
+  function cerrarRendicion(id) {
+    return fetch(BASE + '/rendiciones/' + id + '/cerrar', {
+      method: 'PUT',
+      headers: authHeader()
+    }).then(function (r) { return r.json(); });
+  }
+
+  // ── Modo Ejecutivo: Detalles ──
+
+  function agregarDetalle(rendicionId, datos) {
+    return fetch(BASE + '/rendiciones/' + rendicionId + '/detalles', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify(datos)
+    }).then(function (r) { return r.json(); });
+  }
+
+  function actualizarDetalle(rendicionId, detalleId, datos) {
+    return fetch(BASE + '/rendiciones/' + rendicionId + '/detalles/' + detalleId, {
+      method: 'PUT',
+      headers: authHeader(),
+      body: JSON.stringify(datos)
+    }).then(function (r) { return r.json(); });
+  }
+
+  function eliminarDetalle(rendicionId, detalleId) {
+    return fetch(BASE + '/rendiciones/' + rendicionId + '/detalles/' + detalleId, {
+      method: 'DELETE',
+      headers: authHeader()
+    }).then(function (r) { return r.json(); });
+  }
+
+  // ── Modo Ejecutivo: Contador ──
+
+  function vincularTrabajador(codigo) {
+    return fetch(BASE + '/vincular', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ codigo: codigo })
+    }).then(function (r) { return r.json(); });
+  }
+
+  function listarTrabajadores() {
+    return fetch(BASE + '/contador/trabajadores', { headers: authHeader() }).then(function (r) { return r.json(); });
+  }
+
   return {
     crearProyecto: crearProyecto,
     unirseProyecto: unirseProyecto,
     obtenerProyecto: obtenerProyecto,
     agregarRendicion: agregarRendicion,
-    urlExcel: urlExcel
+    urlExcel: urlExcel,
+
+    register: register,
+    login: login,
+    logout: logout,
+    me: me,
+
+    crearRendicionEjecutiva: crearRendicionEjecutiva,
+    listarRendiciones: listarRendiciones,
+    obtenerRendicion: obtenerRendicion,
+    cerrarRendicion: cerrarRendicion,
+
+    agregarDetalle: agregarDetalle,
+    actualizarDetalle: actualizarDetalle,
+    eliminarDetalle: eliminarDetalle,
+
+    vincularTrabajador: vincularTrabajador,
+    listarTrabajadores: listarTrabajadores
   };
 })();
