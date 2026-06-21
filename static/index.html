@@ -11,8 +11,254 @@
 </head>
 <body>
   <div id="app">
-    <!-- Vista 1: Registro / Acceso -->
-    <div id="view-registro" class="view">
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista 0: Seleccion de modo -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-modo" class="view">
+      <div class="container">
+        <div class="card card-hero">
+          <div class="logo"><img src="https://ikxkgiiwcjsfxiqnwojk.supabase.co/storage/v1/object/public/boletas/Designer%20(3).png" alt="Logo"></div>
+          <h1>Cuentas Claras</h1>
+          <p class="subtitle">Conservan la confianza y amistad</p>
+        </div>
+        <div class="card">
+          <h2>Selecciona el modo</h2>
+          <button id="btn-modo-libre" class="btn btn-primary btn-lg btn-block">Modo Libre</button>
+          <p class="desc" style="text-align:center;margin-top:8px">Divide gastos entre amigos. Simple, sin registro.</p>
+          <button id="btn-modo-ejecutivo" class="btn btn-outline btn-lg btn-block" style="margin-top:16px">Modo Ejecutivo</button>
+          <p class="desc" style="text-align:center;margin-top:8px">Rendiciones formales para entregar a tu contador.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista: Login -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-login" class="view hidden">
+      <div class="container">
+        <div class="card card-hero">
+          <div class="logo"><img src="https://ikxkgiiwcjsfxiqnwojk.supabase.co/storage/v1/object/public/boletas/Designer%20(3).png" alt="Logo"></div>
+          <h1>Modo Ejecutivo</h1>
+          <p class="subtitle">Accede a tu cuenta</p>
+        </div>
+        <div class="card">
+          <form id="form-login">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" placeholder="tu@correo.com" required autocomplete="email">
+            <label for="login-password">Contrasena</label>
+            <input type="password" id="login-password" placeholder="Minimo 6 caracteres" required autocomplete="current-password">
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top:16px">Ingresar</button>
+          </form>
+          <p style="text-align:center;margin-top:12px;color:#64748b;font-size:0.85rem">
+            No tienes cuenta? <button id="btn-ir-registro" class="btn btn-link">Registrate</button>
+          </p>
+          <p style="text-align:center;margin-top:4px">
+            <button id="btn-volver-modo-login" class="btn btn-link">Volver</button>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista: Registro de usuario -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-registro-usuario" class="view hidden">
+      <div class="container">
+        <div class="card card-hero">
+          <div class="logo"><img src="https://ikxkgiiwcjsfxiqnwojk.supabase.co/storage/v1/object/public/boletas/Designer%20(3).png" alt="Logo"></div>
+          <h1>Crear cuenta</h1>
+          <p class="subtitle">Registrate en el modo ejecutivo</p>
+        </div>
+        <div class="card">
+          <form id="form-registro-usuario">
+            <label for="reg-email">Email</label>
+            <input type="email" id="reg-email" placeholder="tu@correo.com" required autocomplete="email">
+            <label for="reg-password">Contrasena</label>
+            <input type="password" id="reg-password" placeholder="Minimo 6 caracteres" required autocomplete="new-password">
+            <label for="reg-rol">Rol</label>
+            <select id="reg-rol" required>
+              <option value="">Seleccionar rol...</option>
+              <option value="trabajador">Trabajador (yo rindo gastos)</option>
+              <option value="contador">Contador (yo recibo rendiciones)</option>
+            </select>
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top:16px">Registrarme</button>
+          </form>
+          <p style="text-align:center;margin-top:12px;color:#64748b;font-size:0.85rem">
+            Ya tienes cuenta? <button id="btn-ir-login" class="btn btn-link">Inicia sesion</button>
+          </p>
+          <p style="text-align:center;margin-top:4px">
+            <button id="btn-volver-modo-reg" class="btn btn-link">Volver</button>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista: Dashboard Ejecutivo (Trabajador) -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-dashboard-ejecutivo" class="view hidden">
+      <div class="container">
+        <div class="card">
+          <div class="header-row">
+            <div>
+              <div class="logo"><img src="https://ikxkgiiwcjsfxiqnwojk.supabase.co/storage/v1/object/public/boletas/Designer%20(3).png" alt="Logo"></div>
+              <h1 style="margin-top:4px">Cuentas Claras</h1>
+              <p class="proyecto-activo" id="ejecutivo-email-display"></p>
+            </div>
+            <button id="btn-cerrar-sesion" class="btn btn-sm btn-outline">Salir</button>
+          </div>
+        </div>
+
+        <div class="card" id="card-codigo-trabajador">
+          <h2>Tu codigo de trabajador</h2>
+          <p class="desc">Comparte este codigo con tu contador para que pueda ver tus rendiciones.</p>
+          <div class="id-box">
+            <span class="id-label">Codigo:</span>
+            <code class="id-code" id="codigo-trabajador-display"></code>
+          </div>
+        </div>
+
+        <div class="card">
+          <button id="btn-nueva-rendicion" class="btn btn-primary btn-lg btn-block">+ Nueva Rendicion</button>
+          <button id="btn-mis-rendiciones" class="btn btn-outline btn-block" style="margin-top:8px">Mis Rendiciones Activas</button>
+          <button id="btn-historial" class="btn btn-outline btn-block" style="margin-top:8px">Historial de Rendiciones</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista: Dashboard Contador -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-dashboard-contador" class="view hidden">
+      <div class="container">
+        <div class="card">
+          <div class="header-row">
+            <div>
+              <div class="logo"><img src="https://ikxkgiiwcjsfxiqnwojk.supabase.co/storage/v1/object/public/boletas/Designer%20(3).png" alt="Logo"></div>
+              <h1 style="margin-top:4px">Cuentas Claras</h1>
+              <p class="proyecto-activo" id="contador-email-display"></p>
+            </div>
+            <button id="btn-cerrar-sesion-contador" class="btn btn-sm btn-outline">Salir</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Vincular trabajador</h2>
+          <p class="desc">Ingresa el codigo que te compartio el trabajador.</p>
+          <form id="form-vincular">
+            <label for="codigo-vincular">Codigo del trabajador</label>
+            <input type="text" id="codigo-vincular" placeholder="Ej: a1b2c3d4" required autocomplete="off">
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top:12px">Vincular</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Trabajadores vinculados</h2>
+          <div id="lista-trabajadores" class="lista-rendiciones">
+            <p class="vacio">No hay trabajadores vinculados aun.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista: Nueva Rendicion -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-nueva-rendicion" class="view hidden">
+      <div class="container">
+        <div class="card">
+          <div class="header-row">
+            <h1>Nueva Rendicion</h1>
+            <button id="btn-volver-nueva-rendicion" class="btn btn-sm btn-outline">Volver</button>
+          </div>
+        </div>
+
+        <div class="card" id="card-tipo-rendicion">
+          <h2>Tipo de rendicion</h2>
+          <button id="btn-tipo-compania" class="btn btn-outline btn-block" style="margin-bottom:8px">
+            Dinero entregado por la compania
+          </button>
+          <button id="btn-tipo-restitucion" class="btn btn-outline btn-block">
+            Restitucion de fondos propios del trabajador
+          </button>
+        </div>
+
+        <div class="card hidden" id="card-form-rendicion">
+          <h2 id="titulo-form-rendicion"></h2>
+          <form id="form-nueva-rendicion">
+            <label for="rendicion-nombre">Nombre de la rendicion</label>
+            <input type="text" id="rendicion-nombre" placeholder="Ej: Rendicion mayo 2025" required>
+            <label for="rendicion-fecha">Fecha</label>
+            <input type="date" id="rendicion-fecha" required>
+            <label for="rendicion-monto">Monto a rendir</label>
+            <input type="number" id="rendicion-monto" placeholder="0" step="any" required>
+            <button type="submit" class="btn btn-success btn-block" style="margin-top:16px">Crear Rendicion</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista: Mis Rendiciones Activas / Historial (lista) -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-lista-rendiciones" class="view hidden">
+      <div class="container">
+        <div class="card">
+          <div class="header-row">
+            <h1 id="titulo-lista-rendiciones"></h1>
+            <button id="btn-volver-lista" class="btn btn-sm btn-outline">Volver</button>
+          </div>
+        </div>
+        <div class="card">
+          <div id="lista-rendiciones-ejecutivas" class="lista-rendiciones">
+            <p class="vacio">Cargando...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista: Detalle de Rendicion -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-detalle-rendicion" class="view hidden">
+      <div class="container">
+        <div class="card">
+          <div class="header-row">
+            <h1 id="detalle-nombre-rendicion"></h1>
+            <button id="btn-volver-detalle" class="btn btn-sm btn-outline">Volver</button>
+          </div>
+          <div class="rendicion-info" id="detalle-info-rendicion"></div>
+        </div>
+
+        <div class="card" id="card-agregar-gasto">
+          <h2>Agregar gasto</h2>
+          <div class="upload-actions" style="flex-direction:column;gap:8px">
+            <button id="btn-detalle-boleta" class="btn btn-primary btn-block">Rendir Boleta (OCR)</button>
+            <button id="btn-detalle-factura" class="btn btn-primary btn-block">Rendir Factura (OCR)</button>
+            <button id="btn-detalle-devolucion" class="btn btn-outline btn-block">Rendir Devolucion de Dinero</button>
+            <button id="btn-detalle-manual" class="btn btn-outline btn-block">Ingresar Manualmente</button>
+          </div>
+        </div>
+
+        <div class="card" id="card-cerrar-rendicion">
+          <button id="btn-cerrar-rendicion" class="btn btn-outline btn-block">Cerrar Rendicion</button>
+          <p class="desc" style="text-align:center;margin-top:4px">Al cerrar no se podran agregar mas gastos.</p>
+        </div>
+
+        <div class="card">
+          <h2>Gastos rendidos</h2>
+          <div id="lista-detalles" class="lista-rendiciones">
+            <p class="vacio">No hay gastos registrados.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista 1: Registro / Acceso (Modo Libre) -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-registro" class="view hidden">
       <div class="container">
         <div class="card card-hero">
           <div class="logo"><img src="https://ikxkgiiwcjsfxiqnwojk.supabase.co/storage/v1/object/public/boletas/Designer%20(3).png" alt="Logo"></div>
@@ -55,10 +301,16 @@
             <button type="submit" class="btn btn-outline btn-block">Unirse al plan</button>
           </form>
         </div>
+
+        <p style="text-align:center;margin-top:12px">
+          <button id="btn-volver-modo" class="btn btn-link">Cambiar de modo</button>
+        </p>
       </div>
     </div>
 
-    <!-- Vista 2: Dashboard -->
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista 2: Dashboard (Modo Libre) -->
+    <!-- ════════════════════════════════════════════ -->
     <div id="view-dashboard" class="view hidden">
       <div class="container">
         <div class="card">
@@ -84,7 +336,7 @@
 
         <div class="card" id="card-split" style="display:none">
           <h2>Dividir cuenta</h2>
-          <p class="desc">Calcula cuánto debe pagar cada participante.</p>
+          <p class="desc">Calcula cuanto debe pagar cada participante.</p>
           <div class="split-total" id="split-total-label"></div>
           <div class="row-2">
             <div>
@@ -96,7 +348,7 @@
               <input type="text" id="split-resultado" readonly placeholder="$ 0">
             </div>
           </div>
-          <button id="btn-calcular-split" class="btn btn-primary btn-block" style="margin-top:12px">Calcular división</button>
+          <button id="btn-calcular-split" class="btn btn-primary btn-block" style="margin-top:12px">Calcular division</button>
         </div>
 
         <div class="card" id="card-historial">
@@ -109,7 +361,9 @@
       </div>
     </div>
 
-    <!-- Vista 3: Subir Boleta -->
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista 3: Subir Boleta (compartida entre modos) -->
+    <!-- ════════════════════════════════════════════ -->
     <div id="view-subir" class="view hidden">
       <div class="container">
         <div class="card">
@@ -147,7 +401,9 @@
       </div>
     </div>
 
-    <!-- Vista 4: Resultado OCR -->
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista 4: Resultado OCR (modificada para ambos modos) -->
+    <!-- ════════════════════════════════════════════ -->
     <div id="view-resultado" class="view hidden">
       <div class="container">
         <div class="card">
@@ -160,6 +416,22 @@
 
         <div class="card">
           <form id="form-resultado">
+            <!-- Campos para modo ejecutivo (ocultos en modo libre) -->
+            <div id="campos-ejecutivo" class="hidden">
+              <div class="row-2">
+                <div>
+                  <label for="campo-rut">RUT Emisor</label>
+                  <input type="text" id="campo-rut" placeholder="Ej: 12345678-9">
+                </div>
+                <div>
+                  <label for="campo-tipo-gasto">Tipo de gasto</label>
+                  <input type="text" id="campo-tipo-gasto" placeholder="Ej: Alimentacion, Transporte...">
+                </div>
+              </div>
+              <label for="campo-descripcion">Descripcion del gasto</label>
+              <input type="text" id="campo-descripcion" placeholder="Ej: Almuerzo con cliente">
+            </div>
+
             <label for="campo-emisor">Empresa que emite</label>
             <input type="text" id="campo-emisor" placeholder="Nombre del comercio" required>
 
@@ -173,7 +445,7 @@
                 </select>
               </div>
               <div>
-                <label for="campo-nro">Nro Boleta / Factura</label>
+                <label for="campo-nro">Nro Documento</label>
                 <input type="text" id="campo-nro" placeholder="Ej: 12345678">
               </div>
             </div>
@@ -206,6 +478,27 @@
       </div>
     </div>
 
+    <!-- ════════════════════════════════════════════ -->
+    <!-- Vista: Detalle Rendicion Contador (solo lectura) -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="view-detalle-contador" class="view hidden">
+      <div class="container">
+        <div class="card">
+          <div class="header-row">
+            <h1 id="detalle-contador-nombre"></h1>
+            <button id="btn-volver-detalle-contador" class="btn btn-sm btn-outline">Volver</button>
+          </div>
+          <div class="rendicion-info" id="detalle-contador-info"></div>
+        </div>
+        <div class="card">
+          <h2>Gastos rendidos</h2>
+          <div id="lista-detalles-contador" class="lista-rendiciones">
+            <p class="vacio">No hay gastos registrados.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="toast" class="toast hidden"></div>
   </div>
 
@@ -214,10 +507,10 @@
   <script src="js/ocr.js"></script>
   <script src="js/app.js"></script>
   <script>
-    // Configuracion Supabase — reemplaza con tus datos reales
     var SUPABASE_URL = 'https://ikxkgiiwcjsfxiqnwojk.supabase.co';
     var SUPABASE_ANON_KEY = 'sb_publishable_oaHcSryjKIhop4RLiRR-ug_nn0CbF8q';
     var supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   </script>
 </body>
 </html>
+
