@@ -515,6 +515,108 @@ input[type="number"]::-webkit-outer-spin-button {
   font-size: 1rem;
 }
 
+/* ═══ Rendicion Info ═══ */
+.rendicion-info {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+
+.rendicion-info p {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.rendicion-info .monto-label {
+  color: #38bdf8;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-top: 8px;
+}
+
+.rendicion-info .badge-estado {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.rendicion-info .badge-estado.activa {
+  background: #1e293b;
+  color: #34d399;
+  border: 1px solid #34d399;
+}
+
+.rendicion-info .badge-estado.cerrada {
+  background: #1e293b;
+  color: #f87171;
+  border: 1px solid #f87171;
+}
+
+.rendicion-info .badge-estado.compania {
+  background: #1e293b;
+  color: #818cf8;
+  border: 1px solid #818cf8;
+}
+
+.rendicion-info .badge-estado.restitucion {
+  background: #1e293b;
+  color: #fbbf24;
+  border: 1px solid #fbbf24;
+}
+
+/* ═══ Detalle item ═══ */
+.detalle-item {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+}
+
+.detalle-item:hover {
+  border-color: #334155;
+}
+
+.detalle-item .d-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.detalle-item .d-empresa {
+  font-weight: 600;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+}
+
+.detalle-item .d-info {
+  color: #64748b;
+  font-size: 0.78rem;
+  margin-bottom: 4px;
+}
+
+.detalle-item .d-monto {
+  color: #34d399;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* ═══ Botones tipo rendicion ═══ */
+.btn-tipo-selected {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
+}
+
 /* ═══ Mobile ═══ */
 @media (max-width: 480px) {
   .container {
@@ -531,4 +633,3 @@ input[type="number"]::-webkit-outer-spin-button {
     min-width: 100%;
   }
 }
-
