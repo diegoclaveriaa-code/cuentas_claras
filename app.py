@@ -1,11 +1,17 @@
 import os
+import io
 import string
 import random
 import tempfile
 import secrets
+import smtplib
 import psycopg2
 import psycopg2.extras
 from functools import wraps
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 from flask import Flask, request, jsonify, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -98,6 +104,13 @@ def init_db():
             cur.execute('''ALTER TABLE detalles_rendicion ADD COLUMN IF NOT EXISTS empresa_emite TEXT''')
             cur.execute('''ALTER TABLE detalles_rendicion ADD COLUMN IF NOT EXISTS monto_neto REAL DEFAULT 0''')
             cur.execute('''ALTER TABLE detalles_rendicion ADD COLUMN IF NOT EXISTS monto_iva REAL DEFAULT 0''')
+            cur.execute('''ALTER TABLE detalles_rendicion ADD COLUMN IF NOT EXISTS centro_costo_id INTEGER''')
+
+            cur.execute('''CREATE TABLE IF NOT EXISTS centros_costo (
+                id SERIAL PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
     except Exception as e:
         print("Error inicializando DB:", e)
 
@@ -722,6 +735,344 @@ def listar_trabajadores():
 
     return jsonify(trabajadores)
 
+# ═══════════════════════════════════════════════════════════════
+#  API: Centros de Costo
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/centros-costo', methods=['GET'])
+@require_auth
+def listar_centros_costo():
+    with get_db() as db:
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT * FROM centros_costo ORDER BY nombre ASC')
+        centros = [dict(c) for c in cur.fetchall()]
+        for c in centros:
+            if c.get('creado_en'):
+                c['creado_en'] = c['creado_en'].isoformat()
+    return jsonify(centros)
+
+@app.route('/api/centros-costo', methods=['POST'])
+@require_auth
+def crear_centro_costo():
+    if request.usuario['rol'] != 'contador':
+        return jsonify({'error': 'Solo los contadores pueden crear centros de costo'}), 403
+
+    data = request.get_json(silent=True) or {}
+    nombre = data.get('nombre', '').strip()
+    if not nombre:
+        return jsonify({'error': 'El nombre es obligatorio'}), 400
+
+    with get_db() as db:
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT id FROM centros_costo WHERE nombre = %s', (nombre,))
+        if cur.fetchone():
+            return jsonify({'error': 'Este centro de costo ya existe'}), 409
+        cur.execute('INSERT INTO centros_costo (nombre) VALUES (%s) RETURNING *', (nombre,))
+        centro = dict(cur.fetchone())
+        if centro.get('creado_en'):
+            centro['creado_en'] = centro['creado_en'].isoformat()
+    return jsonify(centro), 201
+
+@app.route('/api/centros-costo/<int:centro_id>', methods=['DELETE'])
+@require_auth
+def eliminar_centro_costo(centro_id):
+    if request.usuario['rol'] != 'contador':
+        return jsonify({'error': 'Solo los contadores pueden eliminar centros de costo'}), 403
+
+    with get_db() as db:
+        cur = db.cursor()
+        cur.execute('UPDATE detalles_rendicion SET centro_costo_id = NULL WHERE centro_costo_id = %s', (centro_id,))
+        cur.execute('DELETE FROM centros_costo WHERE id = %s', (centro_id,))
+    return jsonify({'ok': True})
+
+@app.route('/api/rendiciones/<int:rendicion_id>/detalles/<int:detalle_id>/centro-costo', methods=['PUT'])
+@require_auth
+def asignar_centro_costo(rendicion_id, detalle_id):
+    if request.usuario['rol'] != 'contador':
+        return jsonify({'error': 'Solo los contadores pueden asignar centro de costo'}), 403
+
+    data = request.get_json(silent=True) or {}
+    centro_id = data.get('centro_costo_id')
+
+    with get_db() as db:
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT * FROM rendiciones_ejecutivas WHERE id = %s', (rendicion_id,))
+        rendicion = cur.fetchone()
+        if not rendicion:
+            return jsonify({'error': 'Rendicion no encontrada'}), 404
+
+        cur.execute(
+            'SELECT id FROM vinculaciones WHERE contador_id = %s AND trabajador_id = %s',
+            (request.usuario_id, rendicion['usuario_id'])
+        )
+        if not cur.fetchone():
+            return jsonify({'error': 'No estas vinculado a este trabajador'}), 403
+
+        cur.execute('SELECT id FROM detalles_rendicion WHERE id = %s AND rendicion_id = %s', (detalle_id, rendicion_id))
+        if not cur.fetchone():
+            return jsonify({'error': 'Detalle no encontrado'}), 404
+
+        if centro_id is not None:
+            if centro_id != '' and centro_id != 'null':
+                cur.execute('SELECT id FROM centros_costo WHERE id = %s', (centro_id,))
+                if not cur.fetchone():
+                    return jsonify({'error': 'Centro de costo no encontrado'}), 404
+                cur.execute('UPDATE detalles_rendicion SET centro_costo_id = %s WHERE id = %s', (centro_id, detalle_id))
+            else:
+                cur.execute('UPDATE detalles_rendicion SET centro_costo_id = NULL WHERE id = %s', (detalle_id,))
+        else:
+            cur.execute('UPDATE detalles_rendicion SET centro_costo_id = NULL WHERE id = %s', (detalle_id,))
+
+    return jsonify({'ok': True})
+
+# ═══════════════════════════════════════════════════════════════
+#  API: Excel Contable
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/rendiciones/<int:rendicion_id>/excel', methods=['GET'])
+@require_auth
+def descargar_excel_contable(rendicion_id):
+    with get_db() as db:
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT * FROM rendiciones_ejecutivas WHERE id = %s', (rendicion_id,))
+        rendicion = cur.fetchone()
+        if not rendicion:
+            return jsonify({'error': 'Rendicion no encontrada'}), 404
+
+        can_access = (request.usuario_id == rendicion['usuario_id'])
+        if not can_access and request.usuario['rol'] == 'contador':
+            cur.execute(
+                'SELECT id FROM vinculaciones WHERE contador_id = %s AND trabajador_id = %s',
+                (request.usuario_id, rendicion['usuario_id'])
+            )
+            can_access = cur.fetchone() is not None
+        if not can_access:
+            return jsonify({'error': 'No autorizado'}), 403
+
+        cur.execute(
+            'SELECT d.*, cc.nombre as centro_costo_nombre FROM detalles_rendicion d LEFT JOIN centros_costo cc ON d.centro_costo_id = cc.id WHERE d.rendicion_id = %s ORDER BY d.creado_en ASC',
+            (rendicion_id,)
+        )
+        detalles = [dict(d) for d in cur.fetchall()]
+
+        cur.execute('SELECT COALESCE(SUM(monto_total), 0) as total FROM detalles_rendicion WHERE rendicion_id = %s', (rendicion_id,))
+        total_render = float(cur.fetchone()['total'])
+
+    try:
+        es_compania = rendicion['tipo'] == 'compania'
+        monto_total = float(rendicion['monto_total'])
+        saldo_sobrante = monto_total - total_render
+        if saldo_sobrante < 0:
+            saldo_sobrante = 0
+
+        wb, ws = _build_excel_rows(rendicion, detalles, es_compania, monto_total, saldo_sobrante, total_render)
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+    except Exception as e:
+        return jsonify({'error': 'Error al generar Excel: ' + str(e)}), 500
+
+    nombre_archivo = rendicion['nombre'].replace(' ', '_') + '.xlsx'
+    return send_file(output, as_attachment=True, download_name=nombre_archivo,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+# ═══════════════════════════════════════════════════════════════
+#  API: Enviar por correo
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/rendiciones/<int:rendicion_id>/enviar', methods=['POST'])
+@require_auth
+def enviar_rendicion_correo(rendicion_id):
+    EMAIL_REMITENTE = os.environ.get('EMAIL_REMITENTE', '')
+    EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')
+
+    if not EMAIL_REMITENTE or not EMAIL_PASSWORD:
+        return jsonify({'error': 'El envio por correo no esta configurado en el servidor'}), 500
+
+    data = request.get_json(silent=True) or {}
+    destinatario = data.get('email', '').strip()
+    if not destinatario:
+        return jsonify({'error': 'El email del destinatario es obligatorio'}), 400
+
+    with get_db() as db:
+        cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute('SELECT * FROM rendiciones_ejecutivas WHERE id = %s', (rendicion_id,))
+        rendicion = cur.fetchone()
+        if not rendicion:
+            return jsonify({'error': 'Rendicion no encontrada'}), 404
+
+        can_access = (request.usuario_id == rendicion['usuario_id'])
+        if not can_access and request.usuario['rol'] == 'contador':
+            cur.execute(
+                'SELECT id FROM vinculaciones WHERE contador_id = %s AND trabajador_id = %s',
+                (request.usuario_id, rendicion['usuario_id'])
+            )
+            can_access = cur.fetchone() is not None
+        if not can_access:
+            return jsonify({'error': 'No autorizado'}), 403
+
+        cur.execute(
+            'SELECT d.*, cc.nombre as centro_costo_nombre FROM detalles_rendicion d LEFT JOIN centros_costo cc ON d.centro_costo_id = cc.id WHERE d.rendicion_id = %s ORDER BY d.creado_en ASC',
+            (rendicion_id,)
+        )
+        detalles = [dict(d) for d in cur.fetchall()]
+
+        cur.execute('SELECT COALESCE(SUM(monto_total), 0) as total FROM detalles_rendicion WHERE rendicion_id = %s', (rendicion_id,))
+        total_render = float(cur.fetchone()['total'])
+
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        es_compania = rendicion['tipo'] == 'compania'
+        monto_total = float(rendicion['monto_total'])
+        saldo_sobrante = monto_total - total_render
+        if saldo_sobrante < 0:
+            saldo_sobrante = 0
+
+        wb, ws = _build_excel_rows(rendicion, detalles, es_compania, monto_total, saldo_sobrante, total_render)
+        excel_io = io.BytesIO()
+        wb.save(excel_io)
+        excel_io.seek(0)
+    except Exception as e:
+        return jsonify({'error': 'Error al generar el Excel: ' + str(e)}), 500
+
+    tipo_label = 'Dinero entregado por la compania' if es_compania else 'Restitucion fondos propios'
+    fotos_html = ''
+    for d in detalles:
+        if d.get('imagen_url'):
+            label = (d.get('empresa_emite') or d['tipo_gasto_entrada']) + (' - ' + d.get('descripcion', '') if d.get('descripcion') else '')
+            fotos_html += '<p>{}<br><a href="{}">Ver foto</a></p>\n'.format(label, d['imagen_url'])
+
+    html = '''<html><body style="font-family:Arial,sans-serif">
+<h2 style="color:#4361EE">Rendicion: {nombre}</h2>
+<p><strong>Tipo:</strong> {tipo}</p>
+<p><strong>Fecha:</strong> {fecha}</p>
+<p><strong>Monto a rendir:</strong> ${monto:,.0f}</p>
+<p><strong>Total rendido:</strong> ${rendido:,.0f}</p>
+<p><strong>Saldo:</strong> ${saldo:,.0f}</p>
+{fotos}
+<p style="color:#666;font-size:12px;margin-top:24px">Enviado desde Cuentas Claras</p>
+</body></html>'''.format(
+        nombre=rendicion['nombre'], tipo=tipo_label, fecha=rendicion['fecha'],
+        monto=monto_total, rendido=total_render, saldo=saldo_sobrante,
+        fotos=fotos_html
+    )
+
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_REMITENTE
+    msg['To'] = destinatario
+    msg['Subject'] = 'Rendicion: {} - {}'.format(rendicion['nombre'], rendicion['fecha'])
+    msg.attach(MIMEText(html, 'html'))
+
+    part = MIMEBase('application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    part.set_payload(excel_io.read())
+    encoders.encode_base64(part)
+    nombre_archivo = rendicion['nombre'].replace(' ', '_') + '.xlsx'
+    part.add_header('Content-Disposition', 'attachment', filename=nombre_archivo)
+    msg.attach(part)
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(EMAIL_REMITENTE, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+    except smtplib.SMTPAuthenticationError:
+        return jsonify({'error': 'Error de autenticacion SMTP. Verifica las credenciales en Render.'}), 500
+    except Exception as e:
+        return jsonify({'error': 'Error al enviar el correo: ' + str(e)}), 500
+
+    return jsonify({'ok': True})
+
+def _build_excel_rows(rendicion, detalles, es_compania, monto_total, saldo_sobrante, total_render):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Rendicion'
+
+    h_fill = PatternFill(start_color='4361EE', end_color='4361EE', fill_type='solid')
+    h_font = Font(color='FFFFFF', bold=True, size=11)
+    thin_border = Border(
+        left=Side(style='thin', color='CCCCCC'), right=Side(style='thin', color='CCCCCC'),
+        top=Side(style='thin', color='CCCCCC'), bottom=Side(style='thin', color='CCCCCC')
+    )
+    header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    cell_align = Alignment(vertical='center', wrap_text=True)
+    number_align = Alignment(horizontal='right', vertical='center')
+
+    headers = ['Fecha', 'Tipo Documento', 'Nro Documento', 'Cuenta Contable',
+               'Descripcion', 'Centro de Costo', 'Debe', 'Haber']
+    col_widths = [14, 20, 16, 22, 40, 20, 16, 16]
+
+    for col_idx, (h, w) in enumerate(zip(headers, col_widths), 1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.fill = h_fill
+        cell.font = h_font
+        cell.alignment = header_align
+        cell.border = thin_border
+        ws.column_dimensions[cell.column_letter].width = w
+
+    row = [2]
+
+    def wr(fecha, tipo_doc, nro_doc, cuenta, descripcion, centro_costo, debe, haber):
+        values = [fecha, tipo_doc, nro_doc, cuenta, descripcion, centro_costo or '', debe, haber]
+        for col_idx, val in enumerate(values, 1):
+            cell = ws.cell(row=row[0], column=col_idx, value=val)
+            cell.border = thin_border
+            cell.alignment = number_align if col_idx in (7, 8) and val else cell_align
+            if col_idx in (7, 8) and isinstance(val, (int, float)):
+                cell.number_format = '#,##0'
+                cell.font = Font(color='1e7e34' if col_idx == 7 else 'b02a37', size=10)
+        row[0] += 1
+
+    if es_compania:
+        desc_fondo = 'Fondo entregado: ' + rendicion['nombre']
+        wr(rendicion['fecha'], 'Fondo por rendir', '', 'Activo por rendir', desc_fondo, '', monto_total, 0)
+        wr(rendicion['fecha'], 'Fondo por rendir', '', 'Banco', desc_fondo, '', 0, monto_total)
+
+    for d in detalles:
+        tipo_doc = d['tipo_gasto_entrada'].capitalize()
+        if d['tipo_gasto_entrada'] == 'devolucion':
+            tipo_doc = 'Dev. dinero'
+        nro = d['nro_documento'] or ''
+        desc = d['descripcion'] or d['empresa_emite'] or ''
+        fecha = d['fecha'] or rendicion['fecha']
+        monto = float(d['monto_total'] or 0)
+        cc = d.get('centro_costo_nombre', '')
+
+        if es_compania:
+            if d['tipo_gasto_entrada'] == 'devolucion':
+                wr(fecha, 'Baucher bancario', nro, 'Banco', desc, cc, monto, 0)
+                wr(fecha, 'Baucher bancario', nro, 'Activo por rendir', desc, cc, 0, monto)
+            else:
+                wr(fecha, tipo_doc, nro, 'Gasto', desc, cc, monto, 0)
+                wr(fecha, tipo_doc, nro, 'Activo por rendir', desc, cc, 0, monto)
+        else:
+            if d['tipo_gasto_entrada'] == 'devolucion':
+                wr(fecha, 'Baucher bancario', nro, 'Cuentas x pagar', desc, cc, monto, 0)
+                wr(fecha, 'Baucher bancario', nro, 'Gasto', desc, cc, 0, monto)
+            else:
+                wr(fecha, tipo_doc, nro, 'Gasto', desc, cc, monto, 0)
+                wr(fecha, tipo_doc, nro, 'Cuentas x pagar', desc, cc, 0, monto)
+
+    if es_compania and saldo_sobrante > 0:
+        wr(rendicion['fecha'], 'Baucher bancario', '', 'Banco', 'Devolucion fondo sobrante', '', saldo_sobrante, 0)
+        wr(rendicion['fecha'], 'Baucher bancario', '', 'Activo por rendir', 'Devolucion fondo sobrante', '', 0, saldo_sobrante)
+
+    row[0] += 1
+    total_cell = ws.cell(row=row[0], column=6, value='TOTAL')
+    total_cell.font = Font(bold=True, size=11)
+    total_cell.alignment = Alignment(horizontal='right', vertical='center')
+    total_cell.border = thin_border
+
+    for c in (ws.cell(row=row[0], column=7), ws.cell(row=row[0], column=8)):
+        c.font = Font(bold=True, size=11)
+        c.alignment = Alignment(horizontal='right', vertical='center')
+        c.border = thin_border
+        c.number_format = '#,##0'
+
+    return wb, ws
+
 # ── Health check ──────────────────────────────────────────────
 
 @app.route('/api/health')
@@ -735,3 +1086,4 @@ init_db()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
