@@ -931,46 +931,43 @@ def enviar_rendicion_correo(rendicion_id):
         excel_io = io.BytesIO()
         wb.save(excel_io)
         excel_io.seek(0)
-    except Exception as e:
-        return jsonify({'error': 'Error al generar el Excel: ' + str(e)}), 500
 
-    tipo_label = 'Dinero entregado por la compania' if es_compania else 'Restitucion fondos propios'
-    fotos_html_parts = []
-    for d in detalles:
-        if d.get('imagen_url'):
-            label = str(d.get('empresa_emite') or d['tipo_gasto_entrada'])
-            desc = d.get('descripcion', '')
-            if desc:
-                label += ' - ' + str(desc)
-            url = str(d['imagen_url'])
-            fotos_html_parts.append('<p>' + label + '<br><a href="' + url + '">Ver foto</a></p>')
-    fotos_html = '\n'.join(fotos_html_parts)
+        tipo_label = 'Dinero entregado por la compania' if es_compania else 'Restitucion fondos propios'
+        fotos_html_parts = []
+        for d in detalles:
+            if d.get('imagen_url'):
+                label = str(d.get('empresa_emite') or d['tipo_gasto_entrada'])
+                desc = d.get('descripcion', '')
+                if desc:
+                    label += ' - ' + str(desc)
+                url = str(d['imagen_url'])
+                fotos_html_parts.append('<p>' + label + '<br><a href="' + url + '">Ver foto</a></p>')
+        fotos_html = '\n'.join(fotos_html_parts)
 
-    html = '<html><body style="font-family:Arial,sans-serif">'
-    html += '<h2 style="color:#4361EE">Rendicion: ' + str(rendicion['nombre']) + '</h2>'
-    html += '<p><strong>Tipo:</strong> ' + tipo_label + '</p>'
-    html += '<p><strong>Fecha:</strong> ' + str(rendicion['fecha']) + '</p>'
-    html += '<p><strong>Monto a rendir:</strong> $' + format(int(monto_total), ',d') + '</p>'
-    html += '<p><strong>Total rendido:</strong> $' + format(int(total_render), ',d') + '</p>'
-    html += '<p><strong>Saldo:</strong> $' + format(int(saldo_sobrante), ',d') + '</p>'
-    html += fotos_html
-    html += '<p style="color:#666;font-size:12px;margin-top:24px">Enviado desde Cuentas Claras</p>'
-    html += '</body></html>'
+        html = '<html><body style="font-family:Arial,sans-serif">'
+        html += '<h2 style="color:#4361EE">Rendicion: ' + str(rendicion['nombre']) + '</h2>'
+        html += '<p><strong>Tipo:</strong> ' + tipo_label + '</p>'
+        html += '<p><strong>Fecha:</strong> ' + str(rendicion['fecha']) + '</p>'
+        html += '<p><strong>Monto a rendir:</strong> $' + format(int(monto_total), ',d') + '</p>'
+        html += '<p><strong>Total rendido:</strong> $' + format(int(total_render), ',d') + '</p>'
+        html += '<p><strong>Saldo:</strong> $' + format(int(saldo_sobrante), ',d') + '</p>'
+        html += fotos_html
+        html += '<p style="color:#666;font-size:12px;margin-top:24px">Enviado desde Cuentas Claras</p>'
+        html += '</body></html>'
 
-    msg = MIMEMultipart()
-    msg['From'] = EMAIL_REMITENTE
-    msg['To'] = destinatario
-    msg['Subject'] = 'Rendicion: ' + str(rendicion['nombre']) + ' - ' + str(rendicion['fecha'])
-    msg.attach(MIMEText(html, 'html'))
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_REMITENTE
+        msg['To'] = destinatario
+        msg['Subject'] = 'Rendicion: ' + str(rendicion['nombre']) + ' - ' + str(rendicion['fecha'])
+        msg.attach(MIMEText(html, 'html'))
 
-    part = MIMEBase('application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    part.set_payload(excel_io.read())
-    encoders.encode_base64(part)
-    nombre_archivo = rendicion['nombre'].replace(' ', '_') + '.xlsx'
-    part.add_header('Content-Disposition', 'attachment', filename=nombre_archivo)
-    msg.attach(part)
+        part = MIMEBase('application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        part.set_payload(excel_io.read())
+        encoders.encode_base64(part)
+        nombre_archivo = str(rendicion['nombre']).replace(' ', '_') + '.xlsx'
+        part.add_header('Content-Disposition', 'attachment', filename=nombre_archivo)
+        msg.attach(part)
 
-    try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(EMAIL_REMITENTE, EMAIL_PASSWORD)
@@ -1087,3 +1084,4 @@ init_db()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
