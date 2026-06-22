@@ -688,7 +688,7 @@
       if (data.error) { toast(data.error, 'error'); return; }
       toast('Correo enviado a ' + email, 'success');
       document.getElementById(emailId).value = '';
-    }).catch(function () { toast('Error al enviar el correo', 'error'); });
+    }).catch(function (err) { toast('Error de red: ' + (err.message || 'sin conexion'), 'error'); });
   }
 
   // ═══════════════════════════════════════════════
@@ -1081,5 +1081,3 @@
 
   init();
 })();
-
-
