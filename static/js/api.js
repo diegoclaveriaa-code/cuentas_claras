@@ -138,6 +138,49 @@ var API = (function () {
     return fetch(BASE + '/contador/trabajadores', { headers: authHeader() }).then(function (r) { return r.json(); });
   }
 
+  // ── Modo Ejecutivo: Centros de Costo ──
+
+  function listarCentrosCosto() {
+    return fetch(BASE + '/centros-costo', { headers: authHeader() }).then(function (r) { return r.json(); });
+  }
+
+  function crearCentroCosto(nombre) {
+    return fetch(BASE + '/centros-costo', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ nombre: nombre })
+    }).then(function (r) { return r.json(); });
+  }
+
+  function eliminarCentroCosto(id) {
+    return fetch(BASE + '/centros-costo/' + id, {
+      method: 'DELETE',
+      headers: authHeader()
+    }).then(function (r) { return r.json(); });
+  }
+
+  function asignarCentroCosto(rendicionId, detalleId, centroCostoId) {
+    return fetch(BASE + '/rendiciones/' + rendicionId + '/detalles/' + detalleId + '/centro-costo', {
+      method: 'PUT',
+      headers: authHeader(),
+      body: JSON.stringify({ centro_costo_id: centroCostoId })
+    }).then(function (r) { return r.json(); });
+  }
+
+  // ── Modo Ejecutivo: Excel Contable y Envio ──
+
+  function urlExcelContable(rendicionId) {
+    return BASE + '/rendiciones/' + rendicionId + '/excel';
+  }
+
+  function enviarRendicionCorreo(rendicionId, email) {
+    return fetch(BASE + '/rendiciones/' + rendicionId + '/enviar', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ email: email })
+    }).then(function (r) { return r.json(); });
+  }
+
   return {
     crearProyecto: crearProyecto,
     unirseProyecto: unirseProyecto,
@@ -160,6 +203,15 @@ var API = (function () {
     eliminarDetalle: eliminarDetalle,
 
     vincularTrabajador: vincularTrabajador,
-    listarTrabajadores: listarTrabajadores
+    listarTrabajadores: listarTrabajadores,
+
+    listarCentrosCosto: listarCentrosCosto,
+    crearCentroCosto: crearCentroCosto,
+    eliminarCentroCosto: eliminarCentroCosto,
+    asignarCentroCosto: asignarCentroCosto,
+
+    urlExcelContable: urlExcelContable,
+    enviarRendicionCorreo: enviarRendicionCorreo
   };
 })();
+
