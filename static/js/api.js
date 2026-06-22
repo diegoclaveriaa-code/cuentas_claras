@@ -169,8 +169,13 @@ var API = (function () {
 
   // ── Modo Ejecutivo: Excel Contable y Envio ──
 
-  function urlExcelContable(rendicionId) {
-    return BASE + '/rendiciones/' + rendicionId + '/excel';
+  function descargarExcelContable(rendicionId) {
+    return fetch(BASE + '/rendiciones/' + rendicionId + '/excel', {
+      headers: authHeader()
+    }).then(function (r) {
+      if (!r.ok) return r.json();
+      return r.blob();
+    });
   }
 
   function enviarRendicionCorreo(rendicionId, email) {
@@ -210,8 +215,7 @@ var API = (function () {
     eliminarCentroCosto: eliminarCentroCosto,
     asignarCentroCosto: asignarCentroCosto,
 
-    urlExcelContable: urlExcelContable,
+    descargarExcelContable: descargarExcelContable,
     enviarRendicionCorreo: enviarRendicionCorreo
   };
 })();
-
