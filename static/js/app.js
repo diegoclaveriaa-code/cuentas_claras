@@ -121,6 +121,7 @@
     // ── Dashboard Contador ──
     document.getElementById('btn-cerrar-sesion-contador').addEventListener('click', onLogout);
     document.getElementById('form-vincular').addEventListener('submit', onVincular);
+    document.getElementById('form-centro-costo').addEventListener('submit', onCrearCentroCosto);
 
     // ── Nueva Rendicion ──
     document.getElementById('btn-tipo-compania').addEventListener('click', function () {
@@ -167,6 +168,20 @@
     document.getElementById('btn-volver-detalle-contador').addEventListener('click', function () {
       mostrarVista('dashboardContador');
       cargarDashboardContador();
+    });
+    document.getElementById('btn-exportar-excel-contador').addEventListener('click', function () {
+      onExportarExcel(true);
+    });
+    document.getElementById('btn-enviar-correo-contador').addEventListener('click', function () {
+      onEnviarCorreo(true);
+    });
+
+    // ── Exportar / Enviar (trabajador) ──
+    document.getElementById('btn-exportar-excel').addEventListener('click', function () {
+      onExportarExcel(false);
+    });
+    document.getElementById('btn-enviar-correo').addEventListener('click', function () {
+      onEnviarCorreo(false);
     });
 
     // ── Modo libre (unchanged events) ──
@@ -303,6 +318,58 @@
       if (data.error) { toast(data.error, 'error'); return; }
       renderTrabajadores(data);
     }).catch(function () { toast('Error al cargar trabajadores', 'error'); });
+    cargarCentrosCosto();
+  }
+
+  function cargarCentrosCosto() {
+    API.listarCentrosCosto().then(function (data) {
+      if (data.error) { toast(data.error, 'error'); return; }
+      renderCentrosCosto(data);
+    }).catch(function () { toast('Error al cargar centros de costo', 'error'); });
+  }
+
+  function renderCentrosCosto(lista) {
+    var container = document.getElementById('lista-centros-costo');
+    if (!lista || lista.length === 0) {
+      container.innerHTML = '<p class="vacio">No hay centros de costo.</p>';
+      return;
+    }
+    container.innerHTML = '';
+    lista.forEach(function (c) {
+      var div = document.createElement('div');
+      div.className = 'rendicion-item';
+      div.style.display = 'flex';
+      div.style.justifyContent = 'space-between';
+      div.style.alignItems = 'center';
+      div.innerHTML = '<span>' + escaparHTML(c.nombre) + '</span>' +
+        '<button class="btn btn-sm btn-outline" data-id="' + c.id + '" style="color:#f87171;border-color:#f87171">Eliminar</button>';
+      div.querySelector('button').addEventListener('click', function (e) {
+        e.stopPropagation();
+        onEliminarCentroCosto(c.id, c.nombre);
+      });
+      container.appendChild(div);
+    });
+  }
+
+  function onCrearCentroCosto(e) {
+    e.preventDefault();
+    var nombre = document.getElementById('centro-costo-nombre').value.trim();
+    if (!nombre) { toast('Ingresa un nombre', 'error'); return; }
+    API.crearCentroCosto(nombre).then(function (data) {
+      if (data.error) { toast(data.error, 'error'); return; }
+      document.getElementById('centro-costo-nombre').value = '';
+      cargarCentrosCosto();
+      toast('Centro de costo creado', 'success');
+    }).catch(function () { toast('Error de conexion', 'error'); });
+  }
+
+  function onEliminarCentroCosto(id, nombre) {
+    if (!confirm('Eliminar centro de costo "' + nombre + '"? Los detalles asignados quedaran sin centro de costo.')) return;
+    API.eliminarCentroCosto(id).then(function (data) {
+      if (data.error) { toast(data.error, 'error'); return; }
+      cargarCentrosCosto();
+      toast('Centro de costo eliminado', 'success');
+    }).catch(function () { toast('Error de conexion', 'error'); });
   }
 
   function renderTrabajadores(lista) {
@@ -473,6 +540,7 @@
     var cerrada = r.estado === 'cerrada';
     document.getElementById('card-agregar-gasto').classList.toggle('hidden', cerrada);
     document.getElementById('card-cerrar-rendicion').classList.toggle('hidden', cerrada);
+    document.getElementById('card-exportar-email').classList.toggle('hidden', !cerrada);
 
     var container = document.getElementById('lista-detalles');
     if (!r.detalles || r.detalles.length === 0) {
@@ -519,6 +587,7 @@
     mostrarVista('detalleContador');
     API.obtenerRendicion(rendicionId).then(function (data) {
       if (data.error) { toast(data.error, 'error'); return; }
+      rendicionActual = data;
       renderDetalleContador(data);
     }).catch(function () { toast('Error al cargar rendicion', 'error'); });
   }
@@ -534,31 +603,81 @@
       '<p class="monto-label">Monto a rendir: $' + formatearNumero(r.monto_total) + '</p>' +
       '<p class="monto-label" style="color:#34d399">Total rendido: $' + formatearNumero(r.total_rendido || 0) + '</p>';
 
-    var container = document.getElementById('lista-detalles-contador');
-    if (!r.detalles || r.detalles.length === 0) {
-      container.innerHTML = '<p class="vacio">No hay gastos registrados.</p>';
-    } else {
-      container.innerHTML = '';
-      r.detalles.forEach(function (d) {
-        var div = document.createElement('div');
-        div.className = 'detalle-item';
-        var tipoBadge = d.tipo_gasto_entrada ? '<span class="badge-tipo">' + d.tipo_gasto_entrada + '</span>' : '';
-        div.innerHTML =
-          '<div class="d-header">' +
-            '<span class="d-empresa">' + escaparHTML(d.empresa_emite || d.tipo_gasto_entrada) + tipoBadge + '</span>' +
-            '<span class="d-monto">$' + formatearNumero(d.monto_total || 0) + '</span>' +
-          '</div>' +
-          '<div class="d-info">' +
-            (d.nro_documento ? 'Doc #' + escaparHTML(d.nro_documento) + ' &middot; ' : '') +
-            (d.rut_emisor ? 'RUT ' + escaparHTML(d.rut_emisor) + ' &middot; ' : '') +
-            (d.fecha || '') +
-          '</div>' +
-          (d.tipo_gasto ? '<div class="d-info">Tipo: ' + escaparHTML(d.tipo_gasto) + '</div>' : '') +
-          (d.descripcion ? '<div class="d-info">' + escaparHTML(d.descripcion) + '</div>' : '') +
-          (d.imagen_url ? '<a href="' + d.imagen_url + '" target="_blank" class="link-foto">Ver foto</a>' : '');
-        container.appendChild(div);
-      });
-    }
+    API.listarCentrosCosto().then(function (centros) {
+      var centrosLista = centros.error ? [] : (centros || []);
+      var container = document.getElementById('lista-detalles-contador');
+      if (!r.detalles || r.detalles.length === 0) {
+        container.innerHTML = '<p class="vacio">No hay gastos registrados.</p>';
+      } else {
+        container.innerHTML = '';
+        r.detalles.forEach(function (d) {
+          var div = document.createElement('div');
+          div.className = 'detalle-item';
+          var tipoBadge = d.tipo_gasto_entrada ? '<span class="badge-tipo">' + d.tipo_gasto_entrada + '</span>' : '';
+
+          var options = '<option value="">Sin centro de costo</option>';
+          centrosLista.forEach(function (c) {
+            var sel = d.centro_costo_id === c.id ? ' selected' : '';
+            options += '<option value="' + c.id + '"' + sel + '>' + escaparHTML(c.nombre) + '</option>';
+          });
+
+          div.innerHTML =
+            '<div class="d-header">' +
+              '<span class="d-empresa">' + escaparHTML(d.empresa_emite || d.tipo_gasto_entrada) + tipoBadge + '</span>' +
+              '<span class="d-monto">$' + formatearNumero(d.monto_total || 0) + '</span>' +
+            '</div>' +
+            '<div class="d-info">' +
+              (d.nro_documento ? 'Doc #' + escaparHTML(d.nro_documento) + ' &middot; ' : '') +
+              (d.rut_emisor ? 'RUT ' + escaparHTML(d.rut_emisor) + ' &middot; ' : '') +
+              (d.fecha || '') +
+            '</div>' +
+            (d.tipo_gasto ? '<div class="d-info">Tipo: ' + escaparHTML(d.tipo_gasto) + '</div>' : '') +
+            (d.descripcion ? '<div class="d-info">' + escaparHTML(d.descripcion) + '</div>' : '') +
+            '<div class="d-info" style="margin-top:6px">' +
+              '<label style="display:inline;margin:0;font-size:0.72rem">Centro de costo: </label>' +
+              '<select class="select-cc" data-detalle-id="' + d.id + '" style="width:auto;padding:4px 8px;font-size:0.78rem;margin-left:4px">' + options + '</select>' +
+            '</div>' +
+            (d.imagen_url ? '<a href="' + d.imagen_url + '" target="_blank" class="link-foto">Ver foto</a>' : '');
+          container.appendChild(div);
+        });
+
+        container.querySelectorAll('.select-cc').forEach(function (sel) {
+          sel.addEventListener('change', function () {
+            var detalleId = parseInt(this.dataset.detalleId);
+            var centroId = this.value ? parseInt(this.value) : null;
+            API.asignarCentroCosto(r.id, detalleId, centroId).then(function (data) {
+              if (data.error) { toast(data.error, 'error'); return; }
+              toast('Centro de costo asignado', 'success');
+            }).catch(function () { toast('Error de conexion', 'error'); });
+          });
+        });
+      }
+    }).catch(function () { toast('Error al cargar centros de costo', 'error'); });
+  }
+
+  // ═══════════════════════════════════════════════
+  //  EXPORTAR EXCEL Y ENVIAR CORREO
+  // ═══════════════════════════════════════════════
+
+  function onExportarExcel(esContador) {
+    var rendId = rendicionActual ? rendicionActual.id : null;
+    if (!rendId) { toast('No hay rendicion seleccionada', 'error'); return; }
+    window.open(API.urlExcelContable(rendId), '_blank');
+    toast('Descargando Excel contable...', 'success');
+  }
+
+  function onEnviarCorreo(esContador) {
+    var rendId = rendicionActual ? rendicionActual.id : null;
+    if (!rendId) { toast('No hay rendicion seleccionada', 'error'); return; }
+    var emailId = esContador ? 'email-destinatario-contador' : 'email-destinatario';
+    var email = document.getElementById(emailId).value.trim();
+    if (!email) { toast('Ingresa un email de destino', 'error'); return; }
+
+    API.enviarRendicionCorreo(rendId, email).then(function (data) {
+      if (data.error) { toast(data.error, 'error'); return; }
+      toast('Correo enviado a ' + email, 'success');
+      document.getElementById(emailId).value = '';
+    }).catch(function () { toast('Error al enviar el correo', 'error'); });
   }
 
   // ═══════════════════════════════════════════════
@@ -951,5 +1070,6 @@
 
   init();
 })();
+
 
 
