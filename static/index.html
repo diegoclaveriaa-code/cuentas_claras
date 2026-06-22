@@ -159,6 +159,17 @@
             <p class="vacio">No hay trabajadores vinculados aun.</p>
           </div>
         </div>
+
+        <div class="card">
+          <h2>Centros de Costo</h2>
+          <div id="lista-centros-costo" class="lista-rendiciones" style="margin-bottom:12px">
+            <p class="vacio">No hay centros de costo.</p>
+          </div>
+          <form id="form-centro-costo" style="display:flex;gap:8px">
+            <input type="text" id="centro-costo-nombre" placeholder="Nombre del centro de costo" required style="flex:1">
+            <button type="submit" class="btn btn-primary btn-sm">Agregar</button>
+          </form>
+        </div>
       </div>
     </div>
 
@@ -251,6 +262,15 @@
           <div id="lista-detalles" class="lista-rendiciones">
             <p class="vacio">No hay gastos registrados.</p>
           </div>
+        </div>
+
+        <div class="card hidden" id="card-exportar-email">
+          <h2>Exportar y enviar</h2>
+          <button id="btn-exportar-excel" class="btn btn-outline btn-block">Descargar Excel Contable</button>
+          <label for="email-destinatario" style="margin-top:16px">Enviar por correo</label>
+          <input type="email" id="email-destinatario" placeholder="destinatario@correo.com">
+          <button id="btn-enviar-correo" class="btn btn-primary btn-block" style="margin-top:8px">Enviar Excel + fotos</button>
+          <p class="desc" style="text-align:center;margin-top:4px">Se enviara el Excel contable y los links a las fotos adjuntas.</p>
         </div>
       </div>
     </div>
@@ -496,6 +516,15 @@
             <p class="vacio">No hay gastos registrados.</p>
           </div>
         </div>
+
+        <div class="card">
+          <h2>Exportar y enviar</h2>
+          <button id="btn-exportar-excel-contador" class="btn btn-outline btn-block">Descargar Excel Contable</button>
+          <label for="email-destinatario-contador" style="margin-top:16px">Enviar por correo</label>
+          <input type="email" id="email-destinatario-contador" placeholder="destinatario@correo.com">
+          <button id="btn-enviar-correo-contador" class="btn btn-primary btn-block" style="margin-top:8px">Enviar Excel + fotos</button>
+          <p class="desc" style="text-align:center;margin-top:4px">Se enviara el Excel contable y los links a las fotos adjuntas.</p>
+        </div>
       </div>
     </div>
 
@@ -513,4 +542,3 @@
   </script>
 </body>
 </html>
-
