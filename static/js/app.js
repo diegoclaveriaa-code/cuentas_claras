@@ -662,8 +662,19 @@
   function onExportarExcel(esContador) {
     var rendId = rendicionActual ? rendicionActual.id : null;
     if (!rendId) { toast('No hay rendicion seleccionada', 'error'); return; }
-    window.open(API.urlExcelContable(rendId), '_blank');
-    toast('Descargando Excel contable...', 'success');
+
+    API.descargarExcelContable(rendId).then(function (data) {
+      if (data.error) { toast(data.error, 'error'); return; }
+      var url = window.URL.createObjectURL(data);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = (rendicionActual.nombre || 'rendicion').replace(/ /g, '_') + '.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast('Excel descargado', 'success');
+    }).catch(function () { toast('Error al descargar Excel', 'error'); });
   }
 
   function onEnviarCorreo(esContador) {
