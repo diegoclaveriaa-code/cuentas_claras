@@ -921,9 +921,6 @@ def enviar_rendicion_correo(rendicion_id):
         total_render = float(cur.fetchone()['total'])
 
     try:
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-
         es_compania = rendicion['tipo'] == 'compania'
         monto_total = float(rendicion['monto_total'])
         saldo_sobrante = monto_total - total_render
@@ -986,6 +983,9 @@ def enviar_rendicion_correo(rendicion_id):
     return jsonify({'ok': True})
 
 def _build_excel_rows(rendicion, detalles, es_compania, monto_total, saldo_sobrante, total_render):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
     wb = Workbook()
     ws = wb.active
     ws.title = 'Rendicion'
@@ -1086,4 +1086,3 @@ init_db()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-
