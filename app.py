@@ -974,9 +974,9 @@ def enviar_rendicion_correo(rendicion_id):
         server.send_message(msg)
         server.quit()
     except smtplib.SMTPAuthenticationError:
-        return jsonify({'error': 'Error de autenticacion SMTP. Verifica las credenciales en Render.'}), 500
+        return jsonify({'error': '[v3] Error de autenticacion SMTP. Verifica las credenciales en Render.'}), 500
     except Exception as e:
-        return jsonify({'error': 'Error al enviar el correo: ' + str(e)}), 500
+        return jsonify({'error': '[v3] Error al enviar el correo: ' + str(e)}), 500
 
     return jsonify({'ok': True})
 
@@ -1084,4 +1084,3 @@ init_db()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-
