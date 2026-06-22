@@ -935,31 +935,32 @@ def enviar_rendicion_correo(rendicion_id):
         return jsonify({'error': 'Error al generar el Excel: ' + str(e)}), 500
 
     tipo_label = 'Dinero entregado por la compania' if es_compania else 'Restitucion fondos propios'
-    fotos_html = ''
+    fotos_html_parts = []
     for d in detalles:
         if d.get('imagen_url'):
-            label = (d.get('empresa_emite') or d['tipo_gasto_entrada']) + (' - ' + d.get('descripcion', '') if d.get('descripcion') else '')
-            fotos_html += '<p>{}<br><a href="{}">Ver foto</a></p>\n'.format(label, d['imagen_url'])
+            label = str(d.get('empresa_emite') or d['tipo_gasto_entrada'])
+            desc = d.get('descripcion', '')
+            if desc:
+                label += ' - ' + str(desc)
+            url = str(d['imagen_url'])
+            fotos_html_parts.append('<p>' + label + '<br><a href="' + url + '">Ver foto</a></p>')
+    fotos_html = '\n'.join(fotos_html_parts)
 
-    html = '''<html><body style="font-family:Arial,sans-serif">
-<h2 style="color:#4361EE">Rendicion: {nombre}</h2>
-<p><strong>Tipo:</strong> {tipo}</p>
-<p><strong>Fecha:</strong> {fecha}</p>
-<p><strong>Monto a rendir:</strong> ${monto:,.0f}</p>
-<p><strong>Total rendido:</strong> ${rendido:,.0f}</p>
-<p><strong>Saldo:</strong> ${saldo:,.0f}</p>
-{fotos}
-<p style="color:#666;font-size:12px;margin-top:24px">Enviado desde Cuentas Claras</p>
-</body></html>'''.format(
-        nombre=rendicion['nombre'], tipo=tipo_label, fecha=rendicion['fecha'],
-        monto=monto_total, rendido=total_render, saldo=saldo_sobrante,
-        fotos=fotos_html
-    )
+    html = '<html><body style="font-family:Arial,sans-serif">'
+    html += '<h2 style="color:#4361EE">Rendicion: ' + str(rendicion['nombre']) + '</h2>'
+    html += '<p><strong>Tipo:</strong> ' + tipo_label + '</p>'
+    html += '<p><strong>Fecha:</strong> ' + str(rendicion['fecha']) + '</p>'
+    html += '<p><strong>Monto a rendir:</strong> $' + format(int(monto_total), ',d') + '</p>'
+    html += '<p><strong>Total rendido:</strong> $' + format(int(total_render), ',d') + '</p>'
+    html += '<p><strong>Saldo:</strong> $' + format(int(saldo_sobrante), ',d') + '</p>'
+    html += fotos_html
+    html += '<p style="color:#666;font-size:12px;margin-top:24px">Enviado desde Cuentas Claras</p>'
+    html += '</body></html>'
 
     msg = MIMEMultipart()
     msg['From'] = EMAIL_REMITENTE
     msg['To'] = destinatario
-    msg['Subject'] = 'Rendicion: {} - {}'.format(rendicion['nombre'], rendicion['fecha'])
+    msg['Subject'] = 'Rendicion: ' + str(rendicion['nombre']) + ' - ' + str(rendicion['fecha'])
     msg.attach(MIMEText(html, 'html'))
 
     part = MIMEBase('application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet')
