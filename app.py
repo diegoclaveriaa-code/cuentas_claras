@@ -1,17 +1,15 @@
 import os
 import io
+import json
+import base64
 import string
 import random
 import tempfile
 import secrets
-import smtplib
+import urllib.request
 import psycopg2
 import psycopg2.extras
 from functools import wraps
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 from flask import Flask, request, jsonify, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -883,11 +881,13 @@ def descargar_excel_contable(rendicion_id):
 @app.route('/api/rendiciones/<int:rendicion_id>/enviar', methods=['POST'])
 @require_auth
 def enviar_rendicion_correo(rendicion_id):
+    RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
     EMAIL_REMITENTE = os.environ.get('EMAIL_REMITENTE', '')
-    EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')
 
-    if not EMAIL_REMITENTE or not EMAIL_PASSWORD:
-        return jsonify({'error': 'El envio por correo no esta configurado en el servidor'}), 500
+    if not RESEND_API_KEY:
+        return jsonify({'error': 'RESEND_API_KEY no configurada en el servidor'}), 500
+    if not EMAIL_REMITENTE:
+        return jsonify({'error': 'EMAIL_REMITENTE no configurado en el servidor'}), 500
 
     data = request.get_json(silent=True) or {}
     destinatario = data.get('email', '').strip()
@@ -931,6 +931,7 @@ def enviar_rendicion_correo(rendicion_id):
         excel_io = io.BytesIO()
         wb.save(excel_io)
         excel_io.seek(0)
+        excel_b64 = base64.b64encode(excel_io.read()).decode('utf-8')
 
         tipo_label = 'Dinero entregado por la compania' if es_compania else 'Restitucion fondos propios'
         fotos_html_parts = []
@@ -955,28 +956,36 @@ def enviar_rendicion_correo(rendicion_id):
         html += '<p style="color:#666;font-size:12px;margin-top:24px">Enviado desde Cuentas Claras</p>'
         html += '</body></html>'
 
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_REMITENTE
-        msg['To'] = destinatario
-        msg['Subject'] = 'Rendicion: ' + str(rendicion['nombre']) + ' - ' + str(rendicion['fecha'])
-        msg.attach(MIMEText(html, 'html'))
-
-        part = MIMEBase('application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        part.set_payload(excel_io.read())
-        encoders.encode_base64(part)
         nombre_archivo = str(rendicion['nombre']).replace(' ', '_') + '.xlsx'
-        part.add_header('Content-Disposition', 'attachment', filename=nombre_archivo)
-        msg.attach(part)
 
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(EMAIL_REMITENTE, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-    except smtplib.SMTPAuthenticationError:
-        return jsonify({'error': '[v3] Error de autenticacion SMTP. Verifica las credenciales en Render.'}), 500
+        payload = json.dumps({
+            'from': 'Cuentas Claras <onboarding@resend.dev>',
+            'to': [destinatario],
+            'reply_to': EMAIL_REMITENTE,
+            'subject': 'Rendicion: ' + str(rendicion['nombre']) + ' - ' + str(rendicion['fecha']),
+            'html': html,
+            'attachments': [{
+                'filename': nombre_archivo,
+                'content': excel_b64
+            }]
+        }).encode('utf-8')
+
+        req = urllib.request.Request(
+            'https://api.resend.com/emails',
+            data=payload,
+            headers={
+                'Authorization': 'Bearer ' + RESEND_API_KEY,
+                'Content-Type': 'application/json'
+            },
+            method='POST'
+        )
+
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp_data = resp.read().decode('utf-8')
+
     except Exception as e:
-        return jsonify({'error': '[v3] Error al enviar el correo: ' + str(e)}), 500
+        msg = str(e)
+        return jsonify({'error': 'Error al enviar el correo: ' + msg}), 500
 
     return jsonify({'ok': True})
 
