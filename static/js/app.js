@@ -239,6 +239,14 @@
     });
 
     document.getElementById('form-resultado').addEventListener('submit', onConfirmar);
+
+    document.getElementById('campo-total').addEventListener('input', function () {
+      var total = parseFloat(this.value) || 0;
+      if (total > 0) {
+        var neto = Math.round(total / 1.19);
+        document.getElementById('campo-neto').value = neto;
+      }
+    });
   }
 
   // ═══════════════════════════════════════════════
@@ -341,7 +349,7 @@
       div.style.display = 'flex';
       div.style.justifyContent = 'space-between';
       div.style.alignItems = 'center';
-      div.innerHTML = '<span>' + escaparHTML(c.nombre) + '</span>' +
+      div.innerHTML = '<span><strong>' + escaparHTML(c.codigo || '') + '</strong> - ' + escaparHTML(c.nombre) + '</span>' +
         '<button class="btn btn-sm btn-outline" data-id="' + c.id + '" style="color:#f87171;border-color:#f87171">Eliminar</button>';
       div.querySelector('button').addEventListener('click', function (e) {
         e.stopPropagation();
@@ -353,10 +361,12 @@
 
   function onCrearCentroCosto(e) {
     e.preventDefault();
+    var codigo = document.getElementById('centro-costo-codigo').value.trim();
     var nombre = document.getElementById('centro-costo-nombre').value.trim();
-    if (!nombre) { toast('Ingresa un nombre', 'error'); return; }
-    API.crearCentroCosto(nombre).then(function (data) {
+    if (!codigo || !nombre) { toast('Ingresa codigo y nombre', 'error'); return; }
+    API.crearCentroCosto(codigo, nombre).then(function (data) {
       if (data.error) { toast(data.error, 'error'); return; }
+      document.getElementById('centro-costo-codigo').value = '';
       document.getElementById('centro-costo-nombre').value = '';
       cargarCentrosCosto();
       toast('Centro de costo creado', 'success');
@@ -618,7 +628,7 @@
           var options = '<option value="">Sin centro de costo</option>';
           centrosLista.forEach(function (c) {
             var sel = d.centro_costo_id === c.id ? ' selected' : '';
-            options += '<option value="' + c.id + '"' + sel + '>' + escaparHTML(c.nombre) + '</option>';
+            options += '<option value="' + c.id + '"' + sel + '>' + escaparHTML(c.codigo + ' - ' + c.nombre) + '</option>';
           });
 
           div.innerHTML =
