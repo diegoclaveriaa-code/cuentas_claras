@@ -106,9 +106,43 @@ def init_db():
 
             cur.execute('''CREATE TABLE IF NOT EXISTS centros_costo (
                 id SERIAL PRIMARY KEY,
+                codigo TEXT UNIQUE NOT NULL,
                 nombre TEXT NOT NULL,
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
+            cur.execute('''ALTER TABLE centros_costo ADD COLUMN IF NOT EXISTS codigo TEXT''')
+            try:
+                cur.execute('''ALTER TABLE centros_costo ADD CONSTRAINT centros_costo_codigo_key UNIQUE (codigo)''')
+            except Exception:
+                pass
+
+            centros_default = [
+                ('110101', 'Finanzas'),
+                ('110102', 'Contabilidad'),
+                ('110103', 'Tesorería'),
+                ('110104', 'Auditoría Interna'),
+                ('110105', 'Control de Gestión'),
+                ('110106', 'IT (Tecnología de Información)'),
+                ('110107', 'Soporte Técnico'),
+                ('110108', 'Desarrollo de Software'),
+                ('110109', 'Operaciones'),
+                ('110110', 'Logística y Distribución'),
+                ('110111', 'MTK (Marketing)'),
+                ('110112', 'Ventas Nacionales'),
+                ('110113', 'Ventas Internacionales'),
+                ('110114', 'Servicio al Cliente'),
+                ('110115', 'E-commerce'),
+                ('110116', 'Recursos Humanos'),
+                ('110117', 'Capacitación y Desarrollo'),
+                ('110118', 'Legal y Cumplimiento'),
+                ('110119', 'Compras y Abastecimiento'),
+                ('110120', 'Servicios Generales'),
+            ]
+            for cod, nom in centros_default:
+                cur.execute(
+                    'INSERT INTO centros_costo (codigo, nombre) VALUES (%s, %s) ON CONFLICT (codigo) DO NOTHING',
+                    (cod, nom)
+                )
     except Exception as e:
         print("Error inicializando DB:", e)
 
@@ -587,6 +621,10 @@ def agregar_detalle(rendicion_id):
         monto_total = data.get('monto_total', 0) or 0
         monto_neto = data.get('monto_neto', 0) or 0
         monto_iva = data.get('monto_iva', 0) or 0
+
+        if monto_total > 0 and monto_neto <= 0:
+            monto_neto = round(monto_total / 1.19)
+            monto_iva = monto_total - monto_neto
         empresa_emite = data.get('empresa_emite', '').strip()
         tipo_gasto = data.get('tipo_gasto', '').strip()
         descripcion = data.get('descripcion', '').strip()
@@ -756,16 +794,17 @@ def crear_centro_costo():
         return jsonify({'error': 'Solo los contadores pueden crear centros de costo'}), 403
 
     data = request.get_json(silent=True) or {}
+    codigo = data.get('codigo', '').strip()
     nombre = data.get('nombre', '').strip()
-    if not nombre:
-        return jsonify({'error': 'El nombre es obligatorio'}), 400
+    if not codigo or not nombre:
+        return jsonify({'error': 'Codigo y nombre son obligatorios'}), 400
 
     with get_db() as db:
         cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute('SELECT id FROM centros_costo WHERE nombre = %s', (nombre,))
+        cur.execute('SELECT id FROM centros_costo WHERE codigo = %s', (codigo,))
         if cur.fetchone():
-            return jsonify({'error': 'Este centro de costo ya existe'}), 409
-        cur.execute('INSERT INTO centros_costo (nombre) VALUES (%s) RETURNING *', (nombre,))
+            return jsonify({'error': 'Este codigo ya existe'}), 409
+        cur.execute('INSERT INTO centros_costo (codigo, nombre) VALUES (%s, %s) RETURNING *', (codigo, nombre))
         centro = dict(cur.fetchone())
         if centro.get('creado_en'):
             centro['creado_en'] = centro['creado_en'].isoformat()
@@ -848,7 +887,7 @@ def descargar_excel_contable(rendicion_id):
             return jsonify({'error': 'No autorizado'}), 403
 
         cur.execute(
-            'SELECT d.*, cc.nombre as centro_costo_nombre FROM detalles_rendicion d LEFT JOIN centros_costo cc ON d.centro_costo_id = cc.id WHERE d.rendicion_id = %s ORDER BY d.creado_en ASC',
+            'SELECT d.*, cc.nombre as centro_costo_nombre, cc.codigo as centro_costo_codigo FROM detalles_rendicion d LEFT JOIN centros_costo cc ON d.centro_costo_id = cc.id WHERE d.rendicion_id = %s ORDER BY d.creado_en ASC',
             (rendicion_id,)
         )
         detalles = [dict(d) for d in cur.fetchall()]
@@ -912,7 +951,7 @@ def enviar_rendicion_correo(rendicion_id):
             return jsonify({'error': 'No autorizado'}), 403
 
         cur.execute(
-            'SELECT d.*, cc.nombre as centro_costo_nombre FROM detalles_rendicion d LEFT JOIN centros_costo cc ON d.centro_costo_id = cc.id WHERE d.rendicion_id = %s ORDER BY d.creado_en ASC',
+            'SELECT d.*, cc.nombre as centro_costo_nombre, cc.codigo as centro_costo_codigo FROM detalles_rendicion d LEFT JOIN centros_costo cc ON d.centro_costo_id = cc.id WHERE d.rendicion_id = %s ORDER BY d.creado_en ASC',
             (rendicion_id,)
         )
         detalles = [dict(d) for d in cur.fetchall()]
@@ -1045,7 +1084,9 @@ def _build_excel_rows(rendicion, detalles, es_compania, monto_total, saldo_sobra
         desc = d['descripcion'] or d['empresa_emite'] or ''
         fecha = d['fecha'] or rendicion['fecha']
         monto = float(d['monto_total'] or 0)
-        cc = d.get('centro_costo_nombre', '')
+        cc_nombre = d.get('centro_costo_nombre', '')
+        cc_codigo = d.get('centro_costo_codigo', '')
+        cc = (cc_codigo + ' - ' + cc_nombre) if cc_codigo and cc_nombre else (cc_codigo or cc_nombre)
 
         if es_compania:
             if d['tipo_gasto_entrada'] == 'devolucion':
@@ -1093,4 +1134,3 @@ init_db()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-
