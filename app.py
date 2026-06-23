@@ -629,13 +629,15 @@ def agregar_detalle(rendicion_id):
         tipo_gasto = data.get('tipo_gasto', '').strip()
         descripcion = data.get('descripcion', '').strip()
         imagen_url = data.get('imagen_url', '').strip()
+        centro_costo_id = data.get('centro_costo_id')
 
         cur.execute('''INSERT INTO detalles_rendicion (
             rendicion_id, tipo_gasto_entrada, fecha, rut_emisor, nro_documento,
-            monto_total, monto_neto, monto_iva, empresa_emite, tipo_gasto, descripcion, imagen_url
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *''', (
+            monto_total, monto_neto, monto_iva, empresa_emite, tipo_gasto, descripcion, imagen_url, centro_costo_id
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *''', (
             rendicion_id, tipo_gasto_entrada, fecha, rut_emisor, nro_documento,
-            monto_total, monto_neto, monto_iva, empresa_emite, tipo_gasto, descripcion, imagen_url
+            monto_total, monto_neto, monto_iva, empresa_emite, tipo_gasto, descripcion, imagen_url,
+            int(centro_costo_id) if centro_costo_id and centro_costo_id != '' and centro_costo_id != 'null' else None
         ))
         detalle = dict(cur.fetchone())
         if detalle.get('creado_en'):
@@ -825,8 +827,8 @@ def eliminar_centro_costo(centro_id):
 @app.route('/api/rendiciones/<int:rendicion_id>/detalles/<int:detalle_id>/centro-costo', methods=['PUT'])
 @require_auth
 def asignar_centro_costo(rendicion_id, detalle_id):
-    if request.usuario['rol'] != 'contador':
-        return jsonify({'error': 'Solo los contadores pueden asignar centro de costo'}), 403
+    if request.usuario['rol'] not in ('trabajador', 'contador'):
+        return jsonify({'error': 'Rol no autorizado'}), 403
 
     data = request.get_json(silent=True) or {}
     centro_id = data.get('centro_costo_id')
@@ -838,12 +840,17 @@ def asignar_centro_costo(rendicion_id, detalle_id):
         if not rendicion:
             return jsonify({'error': 'Rendicion no encontrada'}), 404
 
-        cur.execute(
-            'SELECT id FROM vinculaciones WHERE contador_id = %s AND trabajador_id = %s',
-            (request.usuario_id, rendicion['usuario_id'])
-        )
-        if not cur.fetchone():
-            return jsonify({'error': 'No estas vinculado a este trabajador'}), 403
+        is_owner = (request.usuario_id == rendicion['usuario_id'])
+        is_contador = request.usuario['rol'] == 'contador'
+        if not is_owner and not is_contador:
+            return jsonify({'error': 'No autorizado'}), 403
+        if is_contador and not is_owner:
+            cur.execute(
+                'SELECT id FROM vinculaciones WHERE contador_id = %s AND trabajador_id = %s',
+                (request.usuario_id, rendicion['usuario_id'])
+            )
+            if not cur.fetchone():
+                return jsonify({'error': 'No estas vinculado a este trabajador'}), 403
 
         cur.execute('SELECT id FROM detalles_rendicion WHERE id = %s AND rendicion_id = %s', (detalle_id, rendicion_id))
         if not cur.fetchone():
