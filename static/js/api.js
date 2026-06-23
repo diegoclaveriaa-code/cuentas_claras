@@ -144,11 +144,11 @@ var API = (function () {
     return fetch(BASE + '/centros-costo', { headers: authHeader() }).then(function (r) { return r.json(); });
   }
 
-  function crearCentroCosto(nombre) {
+  function crearCentroCosto(codigo, nombre) {
     return fetch(BASE + '/centros-costo', {
       method: 'POST',
       headers: authHeader(),
-      body: JSON.stringify({ nombre: nombre })
+      body: JSON.stringify({ codigo: codigo, nombre: nombre })
     }).then(function (r) { return r.json(); });
   }
 
@@ -219,4 +219,3 @@ var API = (function () {
     enviarRendicionCorreo: enviarRendicionCorreo
   };
 })();
-
