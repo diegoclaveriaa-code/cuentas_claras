@@ -881,11 +881,11 @@ def descargar_excel_contable(rendicion_id):
 @app.route('/api/rendiciones/<int:rendicion_id>/enviar', methods=['POST'])
 @require_auth
 def enviar_rendicion_correo(rendicion_id):
-    RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+    SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
     EMAIL_REMITENTE = os.environ.get('EMAIL_REMITENTE', '')
 
-    if not RESEND_API_KEY:
-        return jsonify({'error': 'RESEND_API_KEY no configurada en el servidor'}), 500
+    if not SENDGRID_API_KEY:
+        return jsonify({'error': 'SENDGRID_API_KEY no configurada en el servidor'}), 500
     if not EMAIL_REMITENTE:
         return jsonify({'error': 'EMAIL_REMITENTE no configurado en el servidor'}), 500
 
@@ -959,22 +959,22 @@ def enviar_rendicion_correo(rendicion_id):
         nombre_archivo = str(rendicion['nombre']).replace(' ', '_') + '.xlsx'
 
         payload = json.dumps({
-            'from': 'Cuentas Claras <onboarding@resend.dev>',
-            'to': [destinatario],
-            'reply_to': EMAIL_REMITENTE,
+            'personalizations': [{'to': [{'email': destinatario}]}],
+            'from': {'email': EMAIL_REMITENTE, 'name': 'Cuentas Claras'},
             'subject': 'Rendicion: ' + str(rendicion['nombre']) + ' - ' + str(rendicion['fecha']),
-            'html': html,
+            'content': [{'type': 'text/html', 'value': html}],
             'attachments': [{
                 'filename': nombre_archivo,
-                'content': excel_b64
+                'content': excel_b64,
+                'type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             }]
         }).encode('utf-8')
 
         req = urllib.request.Request(
-            'https://api.resend.com/emails',
+            'https://api.sendgrid.com/v3/mail/send',
             data=payload,
             headers={
-                'Authorization': 'Bearer ' + RESEND_API_KEY,
+                'Authorization': 'Bearer ' + SENDGRID_API_KEY,
                 'Content-Type': 'application/json'
             },
             method='POST'
@@ -1093,3 +1093,4 @@ init_db()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
