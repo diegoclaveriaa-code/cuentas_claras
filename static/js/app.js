@@ -556,26 +556,51 @@
     if (!r.detalles || r.detalles.length === 0) {
       container.innerHTML = '<p class="vacio">No hay gastos registrados.</p>';
     } else {
-      container.innerHTML = '';
-      r.detalles.forEach(function (d) {
-        var div = document.createElement('div');
-        div.className = 'detalle-item';
-        var tipoBadge = d.tipo_gasto_entrada ? '<span class="badge-tipo">' + d.tipo_gasto_entrada + '</span>' : '';
-        div.innerHTML =
-          '<div class="d-header">' +
-            '<span class="d-empresa">' + escaparHTML(d.empresa_emite || d.tipo_gasto_entrada) + tipoBadge + '</span>' +
-            '<span class="d-monto">$' + formatearNumero(d.monto_total || 0) + '</span>' +
-          '</div>' +
-          '<div class="d-info">' +
-            (d.nro_documento ? 'Doc #' + escaparHTML(d.nro_documento) + ' &middot; ' : '') +
-            (d.rut_emisor ? 'RUT ' + escaparHTML(d.rut_emisor) + ' &middot; ' : '') +
-            (d.fecha || '') +
-          '</div>' +
-          (d.tipo_gasto ? '<div class="d-info">Tipo: ' + escaparHTML(d.tipo_gasto) + '</div>' : '') +
-          (d.descripcion ? '<div class="d-info">' + escaparHTML(d.descripcion) + '</div>' : '') +
-          (d.imagen_url ? '<a href="' + d.imagen_url + '" target="_blank" class="link-foto">Ver foto</a>' : '');
-        container.appendChild(div);
-      });
+      API.listarCentrosCosto().then(function (centros) {
+        var centrosLista = centros.error ? [] : (centros || []);
+        container.innerHTML = '';
+        r.detalles.forEach(function (d) {
+          var div = document.createElement('div');
+          div.className = 'detalle-item';
+          var tipoBadge = d.tipo_gasto_entrada ? '<span class="badge-tipo">' + d.tipo_gasto_entrada + '</span>' : '';
+
+          var options = '<option value="">Sin centro de costo</option>';
+          centrosLista.forEach(function (c) {
+            var sel = d.centro_costo_id === c.id ? ' selected' : '';
+            options += '<option value="' + c.id + '"' + sel + '>' + escaparHTML(c.codigo + ' - ' + c.nombre) + '</option>';
+          });
+
+          div.innerHTML =
+            '<div class="d-header">' +
+              '<span class="d-empresa">' + escaparHTML(d.empresa_emite || d.tipo_gasto_entrada) + tipoBadge + '</span>' +
+              '<span class="d-monto">$' + formatearNumero(d.monto_total || 0) + '</span>' +
+            '</div>' +
+            '<div class="d-info">' +
+              (d.nro_documento ? 'Doc #' + escaparHTML(d.nro_documento) + ' &middot; ' : '') +
+              (d.rut_emisor ? 'RUT ' + escaparHTML(d.rut_emisor) + ' &middot; ' : '') +
+              (d.fecha || '') +
+            '</div>' +
+            (d.tipo_gasto ? '<div class="d-info">Tipo: ' + escaparHTML(d.tipo_gasto) + '</div>' : '') +
+            (d.descripcion ? '<div class="d-info">' + escaparHTML(d.descripcion) + '</div>' : '') +
+            '<div class="d-info" style="margin-top:6px">' +
+              '<label style="display:inline;margin:0;font-size:0.72rem">Centro de costo: </label>' +
+              '<select class="select-cc" data-detalle-id="' + d.id + '" style="width:auto;padding:4px 8px;font-size:0.78rem;margin-left:4px">' + options + '</select>' +
+            '</div>' +
+            (d.imagen_url ? '<a href="' + d.imagen_url + '" target="_blank" class="link-foto">Ver foto</a>' : '');
+          container.appendChild(div);
+        });
+
+        container.querySelectorAll('.select-cc').forEach(function (sel) {
+          sel.addEventListener('change', function () {
+            var detalleId = parseInt(this.dataset.detalleId);
+            var centroId = this.value ? parseInt(this.value) : null;
+            API.asignarCentroCosto(r.id, detalleId, centroId).then(function (data) {
+              if (data.error) { toast(data.error, 'error'); return; }
+              toast('Centro de costo asignado', 'success');
+            }).catch(function () { toast('Error de conexion', 'error'); });
+          });
+        });
+      }).catch(function () {});
     }
   }
 
@@ -925,7 +950,20 @@
       ('0' + ahora.getDate()).slice(-2);
     document.getElementById('campo-hora').value =
       ('0' + ahora.getHours()).slice(-2) + ':' + ('0' + ahora.getMinutes()).slice(-2);
+
+    cargarDropdownCentrosCosto();
     mostrarVista('resultado');
+  }
+
+  function cargarDropdownCentrosCosto() {
+    API.listarCentrosCosto().then(function (centros) {
+      if (centros.error) return;
+      var sel = document.getElementById('campo-centro-costo');
+      sel.innerHTML = '<option value="">Sin centro de costo</option>';
+      centros.forEach(function (c) {
+        sel.innerHTML += '<option value="' + c.id + '">' + escaparHTML(c.codigo + ' - ' + c.nombre) + '</option>';
+      });
+    });
   }
 
   function onProcesar() {
@@ -954,6 +992,7 @@
         if (origenOCR === 'ejecutivo-factura') datos.tipoDocumento = 'Factura';
         else if (origenOCR === 'ejecutivo-boleta') datos.tipoDocumento = 'Boleta';
         else if (origenOCR === 'ejecutivo-devolucion') datos.tipoDocumento = 'Boleta';
+        cargarDropdownCentrosCosto();
       } else {
         document.getElementById('campos-ejecutivo').classList.add('hidden');
       }
@@ -1009,7 +1048,8 @@
         monto_neto: montoNeto,
         empresa_emite: empresaEmite,
         tipo_gasto: document.getElementById('campo-tipo-gasto').value.trim(),
-        descripcion: document.getElementById('campo-descripcion').value.trim()
+        descripcion: document.getElementById('campo-descripcion').value.trim(),
+        centro_costo_id: document.getElementById('campo-centro-costo').value || null
       };
 
       function guardarDetalle() {
